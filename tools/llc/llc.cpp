@@ -176,6 +176,8 @@ static tool_output_file *GetOutputStream(const char *TargetName,
 // main - Entry point for the llc compiler.
 //
 int main(int argc, char **argv) {
+  dbgs() << "WARN: Meng's build of llc running...\n";
+
   sys::PrintStackTraceOnErrorSignal();
   PrettyStackTraceProgram X(argc, argv);
 

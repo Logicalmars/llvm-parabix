@@ -292,7 +292,11 @@ void X86TargetLowering::resetOperationActions() {
   addRegisterClass(MVT::i16, &X86::GR16RegClass);
   addRegisterClass(MVT::i32, &X86::GR32RegClass);
   if (Subtarget->is64Bit())
+  {
     addRegisterClass(MVT::i64, &X86::GR64RegClass);
+  }
+  // FIXME: move this line into is64Bit if
+  addRegisterClass(MVT::v64i1, &X86::GR64RegClass);
 
   setLoadExtAction(ISD::SEXTLOAD, MVT::i1, Promote);
 
@@ -1873,7 +1877,7 @@ X86TargetLowering::LowerReturn(SDValue Chain,
       ValToCopy = DAG.getNode(ISD::BITCAST, dl, VA.getLocVT(), ValToCopy);
 
     assert(VA.getLocInfo() != CCValAssign::FPExt &&
-           "Unexpected FP-extend for return value.");  
+           "Unexpected FP-extend for return value.");
 
     // If this is x86-64, and we disabled SSE, we can't return FP values,
     // or SSE or MMX vectors.
@@ -6021,7 +6025,7 @@ X86TargetLowering::LowerBUILD_VECTORvXi1(SDValue Op, SelectionDAG &DAG) const {
                                          MVT::getIntegerVT(VT.getSizeInBits()));
       DstVec = DAG.getNode(ISD::BITCAST, dl, VT, VecAsImm);
     }
-    else 
+    else
       DstVec = DAG.getUNDEF(VT);
     return DAG.getNode(ISD::INSERT_VECTOR_ELT, dl, VT, DstVec,
                        Op.getOperand(NonConstIdx),
@@ -8349,7 +8353,7 @@ static SDValue LowerINSERT_VECTOR_ELT_SSE4(SDValue Op, SelectionDAG &DAG) {
 
 /// Insert one bit to mask vector, like v16i1 or v8i1.
 /// AVX-512 feature.
-SDValue 
+SDValue
 X86TargetLowering::InsertBitToMaskVector(SDValue Op, SelectionDAG &DAG) const {
   SDLoc dl(Op);
   SDValue Vec = Op.getOperand(0);
@@ -8362,7 +8366,7 @@ X86TargetLowering::InsertBitToMaskVector(SDValue Op, SelectionDAG &DAG) const {
     // insert element and then truncate the result.
     MVT ExtVecVT = (VecVT == MVT::v8i1 ?  MVT::v8i64 : MVT::v16i32);
     MVT ExtEltVT = (VecVT == MVT::v8i1 ?  MVT::i64 : MVT::i32);
-    SDValue ExtOp = DAG.getNode(ISD::INSERT_VECTOR_ELT, dl, ExtVecVT, 
+    SDValue ExtOp = DAG.getNode(ISD::INSERT_VECTOR_ELT, dl, ExtVecVT,
       DAG.getNode(ISD::ZERO_EXTEND, dl, ExtVecVT, Vec),
       DAG.getNode(ISD::ZERO_EXTEND, dl, ExtEltVT, Elt), Idx);
     return DAG.getNode(ISD::TRUNCATE, dl, VecVT, ExtOp);
@@ -8385,7 +8389,7 @@ SDValue
 X86TargetLowering::LowerINSERT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) const {
   MVT VT = Op.getSimpleValueType();
   MVT EltVT = VT.getVectorElementType();
-  
+
   if (EltVT == MVT::i1)
     return InsertBitToMaskVector(Op, DAG);
 
@@ -9595,7 +9599,7 @@ SDValue X86TargetLowering::LowerTRUNCATE(SDValue Op, SelectionDAG &DAG) const {
       In = DAG.getNode(ISD::SIGN_EXTEND, DL, ExtVT, In);
       InVT = ExtVT;
     }
-    
+
     SDValue Cst = DAG.getTargetConstant(1, InVT.getVectorElementType());
     const Constant *C = (dyn_cast<ConstantSDNode>(Cst))->getConstantIntValue();
     SDValue CP = DAG.getConstantPool(C, getPointerTy());
@@ -10260,12 +10264,12 @@ SDValue X86TargetLowering::EmitCmp(SDValue Op0, SDValue Op1, unsigned X86CC,
      if (Op0.getValueType() == MVT::i1)
        llvm_unreachable("Unexpected comparison operation for MVT::i1 operands");
   }
- 
+
   if ((Op0.getValueType() == MVT::i8 || Op0.getValueType() == MVT::i16 ||
        Op0.getValueType() == MVT::i32 || Op0.getValueType() == MVT::i64)) {
-    // Do the comparison at i32 if it's smaller, besides the Atom case. 
-    // This avoids subregister aliasing issues. Keep the smaller reference 
-    // if we're optimizing for size, however, as that'll allow better folding 
+    // Do the comparison at i32 if it's smaller, besides the Atom case.
+    // This avoids subregister aliasing issues. Keep the smaller reference
+    // if we're optimizing for size, however, as that'll allow better folding
     // of memory operations.
     if (Op0.getValueType() != MVT::i32 && Op0.getValueType() != MVT::i64 &&
         !DAG.getMachineFunction().getFunction()->getAttributes().hasAttribute(
@@ -12688,7 +12692,7 @@ struct IntrinsicData {
 std::map < unsigned, IntrinsicData> IntrMap;
 static void InitIntinsicsMap() {
   static bool Initialized = false;
-  if (Initialized) 
+  if (Initialized)
     return;
   IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_gather_qps_512,
                                 IntrinsicData(GATHER, X86::VGATHERQPSZrm, 0)));
@@ -12700,54 +12704,54 @@ static void InitIntinsicsMap() {
                                 IntrinsicData(GATHER, X86::VGATHERDPDZrm, 0)));
   IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_gather_dps_512,
                                 IntrinsicData(GATHER, X86::VGATHERDPSZrm, 0)));
-  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_gather_qpi_512, 
+  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_gather_qpi_512,
                                 IntrinsicData(GATHER, X86::VPGATHERQDZrm, 0)));
-  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_gather_qpq_512, 
+  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_gather_qpq_512,
                                 IntrinsicData(GATHER, X86::VPGATHERQQZrm, 0)));
-  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_gather_dpi_512, 
+  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_gather_dpi_512,
                                 IntrinsicData(GATHER, X86::VPGATHERDDZrm, 0)));
-  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_gather_dpq_512, 
+  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_gather_dpq_512,
                                 IntrinsicData(GATHER, X86::VPGATHERDQZrm, 0)));
 
   IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_scatter_qps_512,
                                 IntrinsicData(SCATTER, X86::VSCATTERQPSZmr, 0)));
-  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_scatter_qpd_512, 
+  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_scatter_qpd_512,
                                 IntrinsicData(SCATTER, X86::VSCATTERQPDZmr, 0)));
-  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_scatter_dpd_512, 
+  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_scatter_dpd_512,
                                 IntrinsicData(SCATTER, X86::VSCATTERDPDZmr, 0)));
-  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_scatter_dps_512, 
+  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_scatter_dps_512,
                                 IntrinsicData(SCATTER, X86::VSCATTERDPSZmr, 0)));
-  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_scatter_qpi_512, 
+  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_scatter_qpi_512,
                                 IntrinsicData(SCATTER, X86::VPSCATTERQDZmr, 0)));
-  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_scatter_qpq_512, 
+  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_scatter_qpq_512,
                                 IntrinsicData(SCATTER, X86::VPSCATTERQQZmr, 0)));
-  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_scatter_dpi_512, 
+  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_scatter_dpi_512,
                                 IntrinsicData(SCATTER, X86::VPSCATTERDDZmr, 0)));
-  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_scatter_dpq_512, 
+  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_scatter_dpq_512,
                                 IntrinsicData(SCATTER, X86::VPSCATTERDQZmr, 0)));
-   
-  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_gatherpf_qps_512, 
+
+  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_gatherpf_qps_512,
                                 IntrinsicData(PREFETCH, X86::VGATHERPF0QPSm,
                                                         X86::VGATHERPF1QPSm)));
-  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_gatherpf_qpd_512, 
+  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_gatherpf_qpd_512,
                                 IntrinsicData(PREFETCH, X86::VGATHERPF0QPDm,
                                                         X86::VGATHERPF1QPDm)));
-  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_gatherpf_dpd_512, 
+  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_gatherpf_dpd_512,
                                 IntrinsicData(PREFETCH, X86::VGATHERPF0DPDm,
                                                         X86::VGATHERPF1DPDm)));
-  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_gatherpf_dps_512, 
+  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_gatherpf_dps_512,
                                 IntrinsicData(PREFETCH, X86::VGATHERPF0DPSm,
                                                         X86::VGATHERPF1DPSm)));
-  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_scatterpf_qps_512, 
+  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_scatterpf_qps_512,
                                 IntrinsicData(PREFETCH, X86::VSCATTERPF0QPSm,
                                                         X86::VSCATTERPF1QPSm)));
-  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_scatterpf_qpd_512, 
+  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_scatterpf_qpd_512,
                                 IntrinsicData(PREFETCH, X86::VSCATTERPF0QPDm,
                                                         X86::VSCATTERPF1QPDm)));
-  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_scatterpf_dpd_512, 
+  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_scatterpf_dpd_512,
                                 IntrinsicData(PREFETCH, X86::VSCATTERPF0DPDm,
                                                         X86::VSCATTERPF1DPDm)));
-  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_scatterpf_dps_512, 
+  IntrMap.insert(std::make_pair(Intrinsic::x86_avx512_scatterpf_dps_512,
                                 IntrinsicData(PREFETCH, X86::VSCATTERPF0DPSm,
                                                         X86::VSCATTERPF1DPSm)));
   IntrMap.insert(std::make_pair(Intrinsic::x86_rdrand_16,
@@ -13841,7 +13845,7 @@ static SDValue LowerShift(SDValue Op, const X86Subtarget* Subtarget,
   // If possible, lower this packed shift into a vector multiply instead of
   // expanding it into a sequence of scalar shifts.
   // Do this only if the vector shift count is a constant build_vector.
-  if (Op.getOpcode() == ISD::SHL && 
+  if (Op.getOpcode() == ISD::SHL &&
       (VT == MVT::v8i16 || VT == MVT::v4i32 ||
        (Subtarget->hasInt256() && VT == MVT::v16i16)) &&
       ISD::isBuildVectorOfConstantSDNodes(Amt.getNode())) {
@@ -13933,15 +13937,15 @@ static SDValue LowerShift(SDValue Op, const X86Subtarget* Subtarget,
           CanBeSimplified = Amt2 == Amt->getOperand(j);
       }
     }
-    
+
     if (CanBeSimplified && isa<ConstantSDNode>(Amt1) &&
         isa<ConstantSDNode>(Amt2)) {
       // Replace this node with two shifts followed by a MOVSS/MOVSD.
       EVT CastVT = MVT::v4i32;
-      SDValue Splat1 = 
+      SDValue Splat1 =
         DAG.getConstant(cast<ConstantSDNode>(Amt1)->getAPIntValue(), VT);
       SDValue Shift1 = DAG.getNode(Op->getOpcode(), dl, VT, R, Splat1);
-      SDValue Splat2 = 
+      SDValue Splat2 =
         DAG.getConstant(cast<ConstantSDNode>(Amt2)->getAPIntValue(), VT);
       SDValue Shift2 = DAG.getNode(Op->getOpcode(), dl, VT, R, Splat2);
       if (TargetOpcode == X86ISD::MOVSD)
@@ -16907,7 +16911,7 @@ X86TargetLowering::emitEHSjLjLongJmp(MachineInstr *MI,
 
 // Replace 213-type (isel default) FMA3 instructions with 231-type for
 // accumulator loops. Writing back to the accumulator allows the coalescer
-// to remove extra copies in the loop.   
+// to remove extra copies in the loop.
 MachineBasicBlock *
 X86TargetLowering::emitFMA3Instr(MachineInstr *MI,
                                  MachineBasicBlock *MBB) const {
@@ -18211,7 +18215,7 @@ static SDValue PerformSELECTCombine(SDNode *N, SelectionDAG &DAG,
       // Check if SETCC has already been promoted
       TLI.getSetCCResultType(*DAG.getContext(), VT) == CondVT &&
       // Check that condition value type matches vselect operand type
-      CondVT == VT) { 
+      CondVT == VT) {
 
     assert(Cond.getValueType().isVector() &&
            "vector select expects a vector selector!");
@@ -18262,7 +18266,7 @@ static SDValue PerformSELECTCombine(SDNode *N, SelectionDAG &DAG,
       unsigned NumElems = Cond.getNumOperands();
       SDValue A = LHS;
       SDValue B = RHS;
-      
+
       if (isZero(Cond.getOperand(0))) {
         CanFold = true;
 
@@ -18735,7 +18739,7 @@ static SDValue PerformINTRINSIC_WO_CHAINCombine(SDNode *N, SelectionDAG &DAG,
     // fold (blend A, B, allOnes) -> B
     if (ISD::isBuildVectorAllOnes(Mask.getNode()))
       return Op1;
-    
+
     // Simplify the case where the mask is a constant i32 value.
     if (ConstantSDNode *C = dyn_cast<ConstantSDNode>(Mask)) {
       if (C->isNullValue())
@@ -21418,7 +21422,7 @@ int X86TargetLowering::getScalingFactorCost(const AddrMode &AM,
   // "load" ports instead of the dedicated "store" port.
   // E.g., on Haswell:
   // vmovaps %ymm1, (%r8, %rdi) can use port 2 or 3.
-  // vmovaps %ymm1, (%r8) can use port 2, 3, or 7.   
+  // vmovaps %ymm1, (%r8) can use port 2, 3, or 7.
   if (isLegalAddressingMode(AM, Ty))
     // Scale represents reg2 * scale, thus account for 1
     // as soon as we use a second register.
