@@ -291,12 +291,12 @@ void X86TargetLowering::resetOperationActions() {
   addRegisterClass(MVT::i8, &X86::GR8RegClass);
   addRegisterClass(MVT::i16, &X86::GR16RegClass);
   addRegisterClass(MVT::i32, &X86::GR32RegClass);
+  addRegisterClass(MVT::v32i1, &X86::GR32RegClass);
   if (Subtarget->is64Bit())
   {
     addRegisterClass(MVT::i64, &X86::GR64RegClass);
+    addRegisterClass(MVT::v64i1, &X86::GR64RegClass);
   }
-  // FIXME: move this line into is64Bit if
-  addRegisterClass(MVT::v64i1, &X86::GR64RegClass);
 
   setLoadExtAction(ISD::SEXTLOAD, MVT::i1, Promote);
 
