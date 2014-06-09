@@ -291,7 +291,7 @@ void X86TargetLowering::resetOperationActions() {
   addRegisterClass(MVT::i8, &X86::GR8RegClass);
   addRegisterClass(MVT::i16, &X86::GR16RegClass);
   addRegisterClass(MVT::i32, &X86::GR32RegClass);
-  addRegisterClass(MVT::v32i1, &X86::GR32RegClass);
+  addRegisterClass(MVT::v32i1, &X86::GR32XRegClass);
   if (Subtarget->is64Bit())
   {
     addRegisterClass(MVT::i64, &X86::GR64RegClass);
@@ -1541,6 +1541,13 @@ void X86TargetLowering::resetOperationActions() {
     setOperationAction(ISD::SDIVREM, MVT::i128, Custom);
     setOperationAction(ISD::UDIVREM, MVT::i128, Custom);
   }
+
+  // Should be a good place to put Parabix operations.
+  // Like Add on v64i1
+  setOperationAction(ISD::ADD, MVT::v32i1, Custom);
+  setOperationAction(ISD::BUILD_VECTOR, MVT::v32i1, Custom);
+  //setOperationAction(ISD::LOAD, MVT::v32i1, Custom);
+  //setOperationAction(ISD::STORE, MVT::v32i1, Custom);
 
   // We have target-specific dag combine patterns for the following nodes:
   setTargetDAGCombine(ISD::VECTOR_SHUFFLE);
@@ -4877,7 +4884,12 @@ static SDValue getZeroVector(EVT VT, const X86Subtarget *Subtarget,
   // Always build SSE zero vectors as <4 x i32> bitcasted
   // to their dest type. This ensures they get CSE'd.
   SDValue Vec;
-  if (VT.is128BitVector()) {  // SSE
+
+  // Hack for parabix for now
+  if (VT.isSimple() && VT.getSimpleVT() == MVT::v32i1)
+  {
+      Vec = DAG.getTargetConstant(0, MVT::i32);
+  } else if (VT.is128BitVector()) {  // SSE
     if (Subtarget->hasSSE2()) {  // SSE2
       SDValue Cst = DAG.getTargetConstant(0, MVT::i32);
       Vec = DAG.getNode(ISD::BUILD_VECTOR, dl, MVT::v4i32, Cst, Cst, Cst, Cst);
@@ -13305,6 +13317,20 @@ static SDValue Lower256IntArith(SDValue Op, SelectionDAG &DAG) {
 }
 
 static SDValue LowerADD(SDValue Op, SelectionDAG &DAG) {
+  //Add for v32i1
+  SDLoc dl(Op);
+  MVT VT = Op.getSimpleValueType();
+  SDValue A = Op.getOperand(0);
+  SDValue B = Op.getOperand(1);
+
+  if (VT == MVT::v32i1)
+  {
+      dbgs() << "LowerADD v32i1" << "\n";
+      SDValue transA = DAG.getNode(ISD::BITCAST, dl, MVT::i32, A);
+      SDValue transB = DAG.getNode(ISD::BITCAST, dl, MVT::i32, B);
+      return DAG.getNode(ISD::XOR, dl, MVT::i32, transA, transB);
+  }
+
   assert(Op.getSimpleValueType().is256BitVector() &&
          Op.getSimpleValueType().isInteger() &&
          "Only handle AVX 256-bit vector integer operation");
