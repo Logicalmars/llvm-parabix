@@ -292,10 +292,12 @@ void X86TargetLowering::resetOperationActions() {
   addRegisterClass(MVT::i16, &X86::GR16RegClass);
   addRegisterClass(MVT::i32, &X86::GR32RegClass);
   addRegisterClass(MVT::v32i1, &X86::GR32XRegClass);
+  addRegisterClass(MVT::i32, &X86::GR32XRegClass);
   if (Subtarget->is64Bit())
   {
     addRegisterClass(MVT::i64, &X86::GR64RegClass);
-    addRegisterClass(MVT::v64i1, &X86::GR64RegClass);
+    addRegisterClass(MVT::i64, &X86::GR64XRegClass);
+    addRegisterClass(MVT::v64i1, &X86::GR64XRegClass);
   }
 
   setLoadExtAction(ISD::SEXTLOAD, MVT::i1, Promote);
@@ -1546,8 +1548,8 @@ void X86TargetLowering::resetOperationActions() {
   // Like Add on v64i1
   setOperationAction(ISD::ADD, MVT::v32i1, Custom);
   setOperationAction(ISD::BUILD_VECTOR, MVT::v32i1, Custom);
-  //setOperationAction(ISD::LOAD, MVT::v32i1, Custom);
-  //setOperationAction(ISD::STORE, MVT::v32i1, Custom);
+  setOperationAction(ISD::LOAD, MVT::v32i1, Custom);
+  setOperationAction(ISD::STORE, MVT::v32i1, Custom);
 
   // We have target-specific dag combine patterns for the following nodes:
   setTargetDAGCombine(ISD::VECTOR_SHUFFLE);
@@ -13316,6 +13318,45 @@ static SDValue Lower256IntArith(SDValue Op, SelectionDAG &DAG) {
                      DAG.getNode(Op.getOpcode(), dl, NewVT, LHS2, RHS2));
 }
 
+// Parabix load/store below
+static SDValue LowerSTORE(SDValue Op, SelectionDAG &DAG) {
+    MVT ValVT = Op.getOperand(1).getSimpleValueType();
+    if (ValVT == MVT::v32i1)
+    {
+        SDNode *Node = Op.getNode();
+        SDLoc dl(Node);
+        StoreSDNode *ST = cast<StoreSDNode>(Node);
+        SDValue Tmp1 = ST->getChain();
+        SDValue Tmp2 = ST->getBasePtr();
+        SDValue Tmp3 = ST->getValue();
+
+        SDValue TransTmp3 = DAG.getNode(ISD::BITCAST, dl, MVT::i32, Tmp3);
+        return DAG.getStore(Tmp1, dl, TransTmp3, Tmp2, ST->getMemOperand());
+    }
+    llvm_unreachable("lowering store for unsupported type");
+    return SDValue();
+}
+
+static SDValue LowerLOAD(SDValue Op, SelectionDAG &DAG) {
+    if (Op.getSimpleValueType() == MVT::v32i1)
+    {
+        SDLoc dl(Op);
+        LoadSDNode *LD = cast<LoadSDNode>(Op);
+
+        SDValue Chain = LD->getChain();
+        SDValue BasePtr = LD->getBasePtr();
+        MachineMemOperand *MMO = LD->getMemOperand();
+
+        SDValue NewLD = DAG.getLoad(MVT::i32, dl, Chain, BasePtr, MMO);
+        SDValue Result = DAG.getNode(ISD::BITCAST, dl, MVT::v32i1, NewLD);
+        SDValue Ops[] = { Result, SDValue(NewLD.getNode(), 1) };
+
+        return DAG.getMergeValues(Ops, dl);
+    }
+    llvm_unreachable("lowering store for unsupported type");
+    return SDValue();
+}
+
 static SDValue LowerADD(SDValue Op, SelectionDAG &DAG) {
   //Add for v32i1
   SDLoc dl(Op);
@@ -14474,6 +14515,8 @@ static SDValue LowerFSINCOS(SDValue Op, const X86Subtarget *Subtarget,
 SDValue X86TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   switch (Op.getOpcode()) {
   default: llvm_unreachable("Should not custom lower this!");
+  case ISD::STORE:              return LowerSTORE(Op, DAG);
+  case ISD::LOAD:               return LowerLOAD(Op, DAG);
   case ISD::SIGN_EXTEND_INREG:  return LowerSIGN_EXTEND_INREG(Op,DAG);
   case ISD::ATOMIC_FENCE:       return LowerATOMIC_FENCE(Op, Subtarget, DAG);
   case ISD::ATOMIC_CMP_SWAP:    return LowerCMP_SWAP(Op, Subtarget, DAG);

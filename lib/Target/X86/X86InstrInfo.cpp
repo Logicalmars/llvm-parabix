@@ -1611,9 +1611,14 @@ unsigned X86InstrInfo::isLoadFromStackSlotPostFE(const MachineInstr *MI,
 unsigned X86InstrInfo::isStoreToStackSlot(const MachineInstr *MI,
                                           int &FrameIndex) const {
   if (isFrameStoreOpcode(MI->getOpcode()))
+  {
+    dbgs() << "isStoreToStackSlot \n";
+    MI->dump();
+
     if (MI->getOperand(X86::AddrNumOperands).getSubReg() == 0 &&
         isFrameOperand(MI, 0, FrameIndex))
       return MI->getOperand(X86::AddrNumOperands).getReg();
+  }
   return 0;
 }
 
@@ -3993,7 +3998,7 @@ bool X86InstrInfo::expandPostRAPseudo(MachineBasicBlock::iterator MI) const {
   case X86::TEST8ri_NOREX:
     MI->setDesc(get(X86::TEST8ri));
     return true;
-  case X86::KSET0B: 
+  case X86::KSET0B:
   case X86::KSET0W: return Expand2AddrUndef(MIB, get(X86::KXORWrr));
   case X86::KSET1B:
   case X86::KSET1W: return Expand2AddrUndef(MIB, get(X86::KXNORWrr));
