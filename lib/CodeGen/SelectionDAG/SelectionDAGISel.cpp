@@ -2465,7 +2465,7 @@ SelectCodeCommon(SDNode *NodeToMatch, const unsigned char *MatcherTable,
   SmallVector<SDNode*, 3> GlueResultNodesMatched;
 
   DEBUG(dbgs() << "ISEL: Starting pattern match on root node: ";
-        NodeToMatch->dump(CurDAG);
+        NodeToMatch->dumprFull(CurDAG);
         dbgs() << '\n');
 
   // Determine where to start the interpreter.  Normally we start at opcode #0,

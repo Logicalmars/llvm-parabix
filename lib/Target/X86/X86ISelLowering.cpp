@@ -4890,7 +4890,8 @@ static SDValue getZeroVector(EVT VT, const X86Subtarget *Subtarget,
   // Hack for parabix for now
   if (VT.isSimple() && VT.getSimpleVT() == MVT::v32i1)
   {
-      Vec = DAG.getTargetConstant(0, MVT::i32);
+      // Careful here, don't use TargetConstant until you are sure.
+      Vec = DAG.getConstant(0, MVT::i32);
   } else if (VT.is128BitVector()) {  // SSE
     if (Subtarget->hasSSE2()) {  // SSE2
       SDValue Cst = DAG.getTargetConstant(0, MVT::i32);
