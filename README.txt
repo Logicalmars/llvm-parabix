@@ -1,3 +1,22 @@
+Complete Integer Project
+===============================
+This project aims to provide a better support for LLVM IR vector operations. Usually,
+when a vector is not legal, like `v32i1`, LLVM will either "widen" or "promote element" this vector.
+We propose a third way here. An example would be good:
+
+```
+%add = add <32 x i1> %a, %b
+```
+
+It's equvalent of the following:
+```
+%add = xor i32 %a, %b
+```
+
+And we can achieve this through manipulating the selectionDAG.
+The full description of this project can be found [here](http://parabix.costar.sfu.ca/wiki/CompleteInteger).
+
+
 Low Level Virtual Machine (LLVM)
 ================================
 

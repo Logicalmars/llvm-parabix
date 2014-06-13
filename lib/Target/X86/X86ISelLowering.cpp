@@ -287,18 +287,25 @@ void X86TargetLowering::resetOperationActions() {
     setUseUnderscoreLongJmp(true);
   }
 
-  // Set up the register classes.
+  // Set up the register classes. 
   addRegisterClass(MVT::i8, &X86::GR8RegClass);
   addRegisterClass(MVT::i16, &X86::GR16RegClass);
   addRegisterClass(MVT::i32, &X86::GR32RegClass);
-  addRegisterClass(MVT::v32i1, &X86::GR32XRegClass);
-  addRegisterClass(MVT::i32, &X86::GR32XRegClass);
   if (Subtarget->is64Bit())
   {
     addRegisterClass(MVT::i64, &X86::GR64RegClass);
-    addRegisterClass(MVT::i64, &X86::GR64XRegClass);
-    addRegisterClass(MVT::v64i1, &X86::GR64XRegClass);
   }
+
+	// Parabix register class
+  static const MVT ParabixVTs[] = { MVT::v32i1, MVT::v64i1 };
+  for (unsigned i = 0; i != array_lengthof(ParabixVTs); ++i) {
+    if (ParabixVTs[i].is32BitVector()) {
+			addRegisterClass(ParabixVTs[i], &X86::GR32XRegClass);
+		}
+		else if (ParabixVTs[i].is64BitVector() && Subtarget->is64Bit()) {
+			addRegisterClass(ParabixVTs[i], &X86::GR64XRegClass);	
+		}
+	}
 
   setLoadExtAction(ISD::SEXTLOAD, MVT::i1, Promote);
 

@@ -237,6 +237,10 @@ namespace llvm {
               SimpleTy <= MVT::LAST_VECTOR_VALUETYPE);
     }
 
+    /// Parabix helper functions here
+    bool isParabixVecotr() const {
+        return (SimpleTy == MVT::v32i1 || SimpleTy == MVT::v64i1);
+    }
 
     /// is1BitVector - Return true if this is a 1-bit vector type.
     bool is1BitVector() const {
@@ -441,7 +445,7 @@ namespace llvm {
       }
     }
 
-    
+
 
 
     unsigned getSizeInBits() const {
