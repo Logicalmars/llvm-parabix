@@ -1612,9 +1612,6 @@ unsigned X86InstrInfo::isStoreToStackSlot(const MachineInstr *MI,
                                           int &FrameIndex) const {
   if (isFrameStoreOpcode(MI->getOpcode()))
   {
-    dbgs() << "isStoreToStackSlot \n";
-    MI->dump();
-
     if (MI->getOperand(X86::AddrNumOperands).getSubReg() == 0 &&
         isFrameOperand(MI, 0, FrameIndex))
       return MI->getOperand(X86::AddrNumOperands).getReg();
