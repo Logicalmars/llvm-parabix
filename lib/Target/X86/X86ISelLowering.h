@@ -585,6 +585,9 @@ namespace llvm {
     ///
     SDValue LowerOperation(SDValue Op, SelectionDAG &DAG) const override;
 
+    /// LowerParabixOperation
+    SDValue LowerParabixOperation(SDValue Op, SelectionDAG &DAG) const;
+
     /// ReplaceNodeResults - Replace the results of node with an illegal result
     /// type with new values built out of custom code.
     ///
@@ -883,6 +886,7 @@ namespace llvm {
 
     SDValue LowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerBUILD_VECTORvXi1(SDValue Op, SelectionDAG &DAG) const;
+    SDValue PXLowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerVECTOR_SHUFFLE(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerVSELECT(SDValue Op, SelectionDAG &DAG) const;
     SDValue LowerEXTRACT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) const;

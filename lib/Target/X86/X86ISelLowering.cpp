@@ -19,6 +19,7 @@
 #include "X86MachineFunctionInfo.h"
 #include "X86TargetMachine.h"
 #include "X86TargetObjectFile.h"
+#include "X86ParabixISelLowering.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/StringExtras.h"
@@ -287,7 +288,7 @@ void X86TargetLowering::resetOperationActions() {
     setUseUnderscoreLongJmp(true);
   }
 
-  // Set up the register classes. 
+  // Set up the register classes.
   addRegisterClass(MVT::i8, &X86::GR8RegClass);
   addRegisterClass(MVT::i16, &X86::GR16RegClass);
   addRegisterClass(MVT::i32, &X86::GR32RegClass);
@@ -296,16 +297,16 @@ void X86TargetLowering::resetOperationActions() {
     addRegisterClass(MVT::i64, &X86::GR64RegClass);
   }
 
-	// Parabix register class
+  // Parabix register class
   static const MVT ParabixVTs[] = { MVT::v32i1, MVT::v64i1 };
   for (unsigned i = 0; i != array_lengthof(ParabixVTs); ++i) {
     if (ParabixVTs[i].is32BitVector()) {
-			addRegisterClass(ParabixVTs[i], &X86::GR32XRegClass);
-		}
-		else if (ParabixVTs[i].is64BitVector() && Subtarget->is64Bit()) {
-			addRegisterClass(ParabixVTs[i], &X86::GR64XRegClass);	
-		}
-	}
+      addRegisterClass(ParabixVTs[i], &X86::GR32XRegClass);
+    }
+    else if (ParabixVTs[i].is64BitVector() && Subtarget->is64Bit()) {
+      addRegisterClass(ParabixVTs[i], &X86::GR64XRegClass);
+    }
+  }
 
   setLoadExtAction(ISD::SEXTLOAD, MVT::i1, Promote);
 
@@ -4894,12 +4895,7 @@ static SDValue getZeroVector(EVT VT, const X86Subtarget *Subtarget,
   // to their dest type. This ensures they get CSE'd.
   SDValue Vec;
 
-  // Hack for parabix for now
-  if (VT.isSimple() && VT.getSimpleVT() == MVT::v32i1)
-  {
-      // Careful here, don't use TargetConstant until you are sure.
-      Vec = DAG.getConstant(0, MVT::i32);
-  } else if (VT.is128BitVector()) {  // SSE
+  if (VT.is128BitVector()) {  // SSE
     if (Subtarget->hasSSE2()) {  // SSE2
       SDValue Cst = DAG.getTargetConstant(0, MVT::i32);
       Vec = DAG.getNode(ISD::BUILD_VECTOR, dl, MVT::v4i32, Cst, Cst, Cst, Cst);
@@ -13326,60 +13322,7 @@ static SDValue Lower256IntArith(SDValue Op, SelectionDAG &DAG) {
                      DAG.getNode(Op.getOpcode(), dl, NewVT, LHS2, RHS2));
 }
 
-// Parabix load/store below
-static SDValue LowerSTORE(SDValue Op, SelectionDAG &DAG) {
-    MVT ValVT = Op.getOperand(1).getSimpleValueType();
-    if (ValVT == MVT::v32i1)
-    {
-        SDNode *Node = Op.getNode();
-        SDLoc dl(Node);
-        StoreSDNode *ST = cast<StoreSDNode>(Node);
-        SDValue Tmp1 = ST->getChain();
-        SDValue Tmp2 = ST->getBasePtr();
-        SDValue Tmp3 = ST->getValue();
-
-        SDValue TransTmp3 = DAG.getNode(ISD::BITCAST, dl, MVT::i32, Tmp3);
-        return DAG.getStore(Tmp1, dl, TransTmp3, Tmp2, ST->getMemOperand());
-    }
-    llvm_unreachable("lowering store for unsupported type");
-    return SDValue();
-}
-
-static SDValue LowerLOAD(SDValue Op, SelectionDAG &DAG) {
-    if (Op.getSimpleValueType() == MVT::v32i1)
-    {
-        SDLoc dl(Op);
-        LoadSDNode *LD = cast<LoadSDNode>(Op);
-
-        SDValue Chain = LD->getChain();
-        SDValue BasePtr = LD->getBasePtr();
-        MachineMemOperand *MMO = LD->getMemOperand();
-
-        SDValue NewLD = DAG.getLoad(MVT::i32, dl, Chain, BasePtr, MMO);
-        SDValue Result = DAG.getNode(ISD::BITCAST, dl, MVT::v32i1, NewLD);
-        SDValue Ops[] = { Result, SDValue(NewLD.getNode(), 1) };
-
-        return DAG.getMergeValues(Ops, dl);
-    }
-    llvm_unreachable("lowering store for unsupported type");
-    return SDValue();
-}
-
 static SDValue LowerADD(SDValue Op, SelectionDAG &DAG) {
-  //Add for v32i1
-  SDLoc dl(Op);
-  MVT VT = Op.getSimpleValueType();
-  SDValue A = Op.getOperand(0);
-  SDValue B = Op.getOperand(1);
-
-  if (VT == MVT::v32i1)
-  {
-      dbgs() << "LowerADD v32i1" << "\n";
-      SDValue transA = DAG.getNode(ISD::BITCAST, dl, MVT::i32, A);
-      SDValue transB = DAG.getNode(ISD::BITCAST, dl, MVT::i32, B);
-      return DAG.getNode(ISD::XOR, dl, MVT::i32, transA, transB);
-  }
-
   assert(Op.getSimpleValueType().is256BitVector() &&
          Op.getSimpleValueType().isInteger() &&
          "Only handle AVX 256-bit vector integer operation");
@@ -14521,10 +14464,15 @@ static SDValue LowerFSINCOS(SDValue Op, const X86Subtarget *Subtarget,
 /// LowerOperation - Provide custom lowering hooks for some operations.
 ///
 SDValue X86TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
+  // Redirect Parabix Operation Lowering
+  if (Op.getValueType().isParabixVector())
+    return LowerParabixOperation(Op, DAG);
+  if (Op.getOpcode() == ISD::STORE &&
+      Op.getOperand(1).getValueType().isParabixVector())
+    return LowerParabixOperation(Op, DAG);
+
   switch (Op.getOpcode()) {
   default: llvm_unreachable("Should not custom lower this!");
-  case ISD::STORE:              return LowerSTORE(Op, DAG);
-  case ISD::LOAD:               return LowerLOAD(Op, DAG);
   case ISD::SIGN_EXTEND_INREG:  return LowerSIGN_EXTEND_INREG(Op,DAG);
   case ISD::ATOMIC_FENCE:       return LowerATOMIC_FENCE(Op, Subtarget, DAG);
   case ISD::ATOMIC_CMP_SWAP:    return LowerCMP_SWAP(Op, Subtarget, DAG);

@@ -117,6 +117,11 @@ namespace llvm {
       return isSimple() ? V.isVector() : isExtendedVector();
     }
 
+    /// isParabixVector - Return true if this is a parabix vector.
+    bool isParabixVector() const {
+      return isSimple() && V.isParabixVector();
+    }
+
     /// is16BitVector - Return true if this is a 16-bit vector type.
     bool is16BitVector() const {
       return isSimple() ? V.is16BitVector() : isExtended16BitVector();

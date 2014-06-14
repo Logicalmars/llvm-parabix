@@ -238,7 +238,7 @@ namespace llvm {
     }
 
     /// Parabix helper functions here
-    bool isParabixVecotr() const {
+    bool isParabixVector() const {
         return (SimpleTy == MVT::v32i1 || SimpleTy == MVT::v64i1);
     }
 
