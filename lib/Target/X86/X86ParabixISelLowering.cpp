@@ -51,6 +51,7 @@
 #include "llvm/Target/TargetOptions.h"
 #include <bitset>
 #include <cctype>
+#include <map>
 using namespace llvm;
 
 #define DEBUG_TYPE "x86-isel"
@@ -92,6 +93,40 @@ static SDValue PXLowerLOAD(SDValue Op, SelectionDAG &DAG) {
   }
   llvm_unreachable("lowering store for unsupported type");
   return SDValue();
+}
+
+typedef std::pair<ISD::NodeType, MVT> CastAndOpKind;
+static std::map<CastAndOpKind, ISD::NodeType> CAOops;
+
+static void resetOperations()
+{
+  CAOops.clear();
+
+  //use XOR to simulate ADD on v32i1
+  CAOops[std::make_pair(ISD::ADD, MVT::v32i1)] = ISD::XOR;
+}
+
+//Bitcast this vector to a full length integer and then do one op
+static SDValue lowerWithCastAndOp(SDValue Op, SelectionDAG &DAG) {
+  SDLoc dl(Op);
+  MVT VT = Op.getSimpleValueType();
+  SDValue A = Op.getOperand(0);
+  SDValue B = Op.getOperand(1);
+  CastAndOpKind kind = std::make_pair((ISD::NodeType)Op.getOpcode(), VT);
+
+  assert(CAOops.find(kind) != CAOops.end() && "Undefined cast and op kind");
+
+  MVT castType;
+  if (VT.is32BitVector())
+    castType = MVT::i32;
+  else if (VT.is64BitVector())
+    castType = MVT::i64;
+  else
+    llvm_unreachable("unsupported parabix vector width");
+
+  SDValue transA = DAG.getNode(ISD::BITCAST, dl, castType, A);
+  SDValue transB = DAG.getNode(ISD::BITCAST, dl, castType, B);
+  return DAG.getNode(CAOops[kind], dl, castType, transA, transB);
 }
 
 static SDValue PXLowerADD(SDValue Op, SelectionDAG &DAG) {
@@ -152,8 +187,14 @@ X86TargetLowering::PXLowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const {
 
 ///Entrance for parabix lowering.
 SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) const {
-  dbgs() << "Parabix Lowering" << "\n";
-  Op.dumpr();
+  dbgs() << "Parabix Lowering" << "\n"; Op.dump();
+
+  //Only resetOperations for the first time.
+  static bool FirstTimeThrough = true;
+  if (FirstTimeThrough) {
+    resetOperations();
+    FirstTimeThrough = false;
+  }
 
   switch (Op.getOpcode()) {
   default: llvm_unreachable("Should not custom lower this parabix op!");
