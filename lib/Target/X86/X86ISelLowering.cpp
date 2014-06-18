@@ -1555,6 +1555,12 @@ void X86TargetLowering::resetOperationActions() {
   // Should be a good place to put Parabix operations.
   // Like Add on v64i1
   setOperationAction(ISD::ADD, MVT::v32i1, Custom);
+  setOperationAction(ISD::SUB, MVT::v32i1, Custom);
+  setOperationAction(ISD::MUL, MVT::v32i1, Custom);
+  setOperationAction(ISD::AND, MVT::v32i1, Custom);
+  setOperationAction(ISD::OR, MVT::v32i1, Custom);
+  setOperationAction(ISD::XOR, MVT::v32i1, Custom);
+  setOperationAction(ISD::MULHU, MVT::v32i1, Custom);
   setOperationAction(ISD::BUILD_VECTOR, MVT::v32i1, Custom);
   setOperationAction(ISD::LOAD, MVT::v32i1, Custom);
   setOperationAction(ISD::STORE, MVT::v32i1, Custom);

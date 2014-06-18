@@ -58,6 +58,7 @@ using namespace llvm;
 
 //Parabix LowerSTORE
 static SDValue PXLowerSTORE(SDValue Op, SelectionDAG &DAG) {
+  //TODO: expand this strategy to all 32bit/64bit vectors
   MVT ValVT = Op.getOperand(1).getSimpleValueType();
   if (ValVT == MVT::v32i1)
   {
@@ -76,6 +77,7 @@ static SDValue PXLowerSTORE(SDValue Op, SelectionDAG &DAG) {
 }
 
 static SDValue PXLowerLOAD(SDValue Op, SelectionDAG &DAG) {
+  //TODO: This strategy works for all 32bit vector and 64bit vectors.
   if (Op.getSimpleValueType() == MVT::v32i1)
   {
     SDLoc dl(Op);
@@ -98,12 +100,34 @@ static SDValue PXLowerLOAD(SDValue Op, SelectionDAG &DAG) {
 typedef std::pair<ISD::NodeType, MVT> CastAndOpKind;
 static std::map<CastAndOpKind, ISD::NodeType> CAOops;
 
+static void addCastAndOpKind(ISD::NodeType Op, MVT VT, ISD::NodeType ReplaceOp)
+{
+  CAOops[std::make_pair(Op, VT)] = ReplaceOp;
+}
+
 static void resetOperations()
 {
+  //NEED: setOperationAction in X86ISelLowering with Custom
   CAOops.clear();
 
   //use XOR to simulate ADD on v32i1
-  CAOops[std::make_pair(ISD::ADD, MVT::v32i1)] = ISD::XOR;
+  addCastAndOpKind(ISD::ADD, MVT::v32i1, ISD::XOR);
+  addCastAndOpKind(ISD::SUB, MVT::v32i1, ISD::XOR);
+  addCastAndOpKind(ISD::MUL, MVT::v32i1, ISD::AND);
+  addCastAndOpKind(ISD::AND, MVT::v32i1, ISD::AND);
+  addCastAndOpKind(ISD::XOR, MVT::v32i1, ISD::XOR);
+  addCastAndOpKind(ISD::OR,  MVT::v32i1, ISD::OR);
+  addCastAndOpKind(ISD::MULHU,  MVT::v32i1, ISD::AND);
+
+  //addCastAndOpKind(ISD::VECTOR_SHUFFLE, MVT::v32i1, Expand);
+  //addCastAndOpKind(ISD::EXTRACT_VECTOR_ELT, MVT::v32i1,Expand);
+  //addCastAndOpKind(ISD::INSERT_VECTOR_ELT, MVT::v32i1, Expand);
+  //addCastAndOpKind(ISD::EXTRACT_SUBVECTOR, MVT::v32i1,Expand);
+  //addCastAndOpKind(ISD::INSERT_SUBVECTOR, MVT::v32i1, EXpand);
+  //SMUL_LOHI
+  //MULHS, UMUL_LOHI, MULHU
+  //SHL, SRA, SRL, ROTL, ROTR,
+  //VSELECT
 }
 
 //Bitcast this vector to a full length integer and then do one op
@@ -126,24 +150,12 @@ static SDValue lowerWithCastAndOp(SDValue Op, SelectionDAG &DAG) {
 
   SDValue transA = DAG.getNode(ISD::BITCAST, dl, castType, A);
   SDValue transB = DAG.getNode(ISD::BITCAST, dl, castType, B);
-  return DAG.getNode(CAOops[kind], dl, castType, transA, transB);
+  SDValue res = DAG.getNode(CAOops[kind], dl, castType, transA, transB);
+
+  return DAG.getNode(ISD::BITCAST, dl, VT, res);
 }
 
 static SDValue PXLowerADD(SDValue Op, SelectionDAG &DAG) {
-  //Add for v32i1
-  SDLoc dl(Op);
-  MVT VT = Op.getSimpleValueType();
-  SDValue A = Op.getOperand(0);
-  SDValue B = Op.getOperand(1);
-
-  if (VT == MVT::v32i1)
-  {
-    dbgs() << "LowerADD v32i1" << "\n";
-    SDValue transA = DAG.getNode(ISD::BITCAST, dl, MVT::i32, A);
-    SDValue transB = DAG.getNode(ISD::BITCAST, dl, MVT::i32, B);
-    return DAG.getNode(ISD::XOR, dl, MVT::i32, transA, transB);
-  }
-
   llvm_unreachable("lowering add for unsupported type");
   return SDValue();
 }
@@ -168,8 +180,8 @@ X86TargetLowering::PXLowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const {
   SDLoc dl(Op);
 
   MVT VT = Op.getSimpleValueType();
-  MVT ExtVT = VT.getVectorElementType();
-  unsigned NumElems = Op.getNumOperands();
+  //MVT ExtVT = VT.getVectorElementType();
+  //unsigned NumElems = Op.getNumOperands();
 
   // Vectors containing all zeros can be matched by pxor and xorps later
   if (ISD::isBuildVectorAllZeros(Op.getNode())) {
@@ -187,7 +199,8 @@ X86TargetLowering::PXLowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const {
 
 ///Entrance for parabix lowering.
 SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) const {
-  dbgs() << "Parabix Lowering" << "\n"; Op.dump();
+  //NEED: setOperationAction in target specific lowering (X86ISelLowering.cpp)
+  dbgs() << "Parabix Lowering:" << "\n"; Op.dumpr();
 
   //Only resetOperations for the first time.
   static bool FirstTimeThrough = true;
@@ -195,6 +208,12 @@ SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) 
     resetOperations();
     FirstTimeThrough = false;
   }
+
+  MVT VT = Op.getSimpleValueType();
+  //Check if we have registered CastAndOp action
+  CastAndOpKind kind = std::make_pair((ISD::NodeType)Op.getOpcode(), VT);
+  if (CAOops.find(kind) != CAOops.end())
+    return lowerWithCastAndOp(Op, DAG);
 
   switch (Op.getOpcode()) {
   default: llvm_unreachable("Should not custom lower this parabix op!");
