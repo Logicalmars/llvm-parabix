@@ -155,6 +155,32 @@ static SDValue lowerWithCastAndOp(SDValue Op, SelectionDAG &DAG) {
   return DAG.getNode(ISD::BITCAST, dl, VT, res);
 }
 
+static SDValue PXLowerShift(SDValue Op, SelectionDAG &DAG) {
+  assert((Op.getOpcode() == ISD::SHL || Op.getOpcode() == ISD::SRA ||
+          Op.getOpcode() == ISD::SRL) && "Only lower shift ops here");
+
+  SDLoc dl(Op);
+  MVT VT = Op.getSimpleValueType();
+  SDValue A = Op.getOperand(0);
+  SDValue B = Op.getOperand(1);
+  SDValue res;
+
+  if (VT == MVT::v32i1 && Op.getOpcode() != ISD::SRA) {
+    //SRL or SHL
+    SDValue transA = DAG.getNode(ISD::BITCAST, dl, MVT::i32, A);
+    SDValue transB = DAG.getNode(ISD::BITCAST, dl, MVT::i32, B);
+    SDValue negB = DAG.getNOT(dl, transB, MVT::i32);
+    res = DAG.getNode(ISD::AND, dl, MVT::i32, transA, negB);
+  }
+  else if (VT == MVT::v32i1 && Op.getOpcode() == ISD::SRA) {
+    return A;
+  }
+  else
+    llvm_unreachable("lowering undefined parabix shift ops");
+
+  return DAG.getNode(ISD::BITCAST, dl, VT, res);
+}
+
 static SDValue PXLowerADD(SDValue Op, SelectionDAG &DAG) {
   llvm_unreachable("lowering add for unsupported type");
   return SDValue();
@@ -221,5 +247,8 @@ SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) 
   case ISD::LOAD:               return PXLowerLOAD(Op, DAG);
   case ISD::ADD:                return PXLowerADD(Op, DAG);
   case ISD::BUILD_VECTOR:       return PXLowerBUILD_VECTOR(Op, DAG);
+  case ISD::SHL:
+  case ISD::SRA:
+  case ISD::SRL:                return PXLowerShift(Op, DAG);
   }
 }

@@ -33,5 +33,3 @@ entry:
   ret void
 }
 
-
-

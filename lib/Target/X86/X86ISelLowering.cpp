@@ -1561,6 +1561,9 @@ void X86TargetLowering::resetOperationActions() {
   setOperationAction(ISD::OR, MVT::v32i1, Custom);
   setOperationAction(ISD::XOR, MVT::v32i1, Custom);
   setOperationAction(ISD::MULHU, MVT::v32i1, Custom);
+  setOperationAction(ISD::SHL, MVT::v32i1, Custom);
+  setOperationAction(ISD::SRL, MVT::v32i1, Custom);
+  setOperationAction(ISD::SRA, MVT::v32i1, Custom);
   setOperationAction(ISD::BUILD_VECTOR, MVT::v32i1, Custom);
   setOperationAction(ISD::LOAD, MVT::v32i1, Custom);
   setOperationAction(ISD::STORE, MVT::v32i1, Custom);
