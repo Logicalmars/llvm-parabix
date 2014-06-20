@@ -186,6 +186,55 @@ static SDValue PXLowerADD(SDValue Op, SelectionDAG &DAG) {
   return SDValue();
 }
 
+static SDValue PXLowerINSERT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) {
+  MVT VT = Op.getSimpleValueType();
+
+  SDLoc dl(Op);
+  SDValue N0 = Op.getOperand(0); // vector <val>
+  SDValue N1 = Op.getOperand(1); // elt
+  SDValue N2 = Op.getOperand(2); // idx
+
+  if (VT == MVT::v32i1 && isa<ConstantSDNode>(N1)) {
+    //Cast v32i1 into i32 and do bit manipulation.
+    SDValue TransN0 = DAG.getNode(ISD::BITCAST, dl, MVT::i32, N0);
+    SDValue Res;
+
+    if (cast<ConstantSDNode>(N1)->isNullValue()) {
+      //insert zero
+      SDValue Mask = DAG.getNode(ISD::SHL, dl, MVT::i32, DAG.getConstant(1, MVT::i32), N2);
+      SDValue NegMask = DAG.getNOT(dl, Mask, MVT::i32);
+      Res = DAG.getNode(ISD::AND, dl, MVT::i32, NegMask, TransN0);
+    }
+    else {
+      //insert one
+      SDValue Mask = DAG.getNode(ISD::SHL, dl, MVT::i32, DAG.getConstant(1, MVT::i32), N2);
+      Res = DAG.getNode(ISD::OR, dl, MVT::i32, Mask, TransN0);
+    }
+
+    // Cast back
+    return DAG.getNode(ISD::BITCAST, dl, VT, Res);
+  }
+
+  llvm_unreachable("lowering insert_vector_elt for unsupported type");
+  return SDValue();
+}
+
+static SDValue PXLowerEXTRACT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) {
+  SDLoc dl(Op);
+  SDValue Vec = Op.getOperand(0);
+  MVT VecVT = Vec.getSimpleValueType();
+  SDValue Idx = Op.getOperand(1);
+
+  if (VecVT == MVT::v32i1) {
+    SDValue TransV = DAG.getNode(ISD::BITCAST, dl, MVT::i32, Vec);
+    SDValue ShiftV = DAG.getNode(ISD::SRL, dl, MVT::i32, TransV, Idx);
+    return DAG.getNode(ISD::TRUNCATE, dl, MVT::i1, ShiftV);
+  }
+
+  llvm_unreachable("lowering extract_vector_elt for unsupported type");
+  return SDValue();
+}
+
 //get zero vector for parabix
 static SDValue getPXZeroVector(EVT VT, const X86Subtarget *Subtarget,
                              SelectionDAG &DAG, SDLoc dl) {
@@ -250,5 +299,7 @@ SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) 
   case ISD::SHL:
   case ISD::SRA:
   case ISD::SRL:                return PXLowerShift(Op, DAG);
+  case ISD::INSERT_VECTOR_ELT:  return PXLowerINSERT_VECTOR_ELT(Op, DAG);
+  case ISD::EXTRACT_VECTOR_ELT: return PXLowerEXTRACT_VECTOR_ELT(Op, DAG);
   }
 }
