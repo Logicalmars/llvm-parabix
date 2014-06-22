@@ -194,21 +194,32 @@ static SDValue PXLowerINSERT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) {
   SDValue N1 = Op.getOperand(1); // elt
   SDValue N2 = Op.getOperand(2); // idx
 
-  if (VT == MVT::v32i1 && isa<ConstantSDNode>(N1)) {
+  if (VT == MVT::v32i1) {
     //Cast v32i1 into i32 and do bit manipulation.
     SDValue TransN0 = DAG.getNode(ISD::BITCAST, dl, MVT::i32, N0);
     SDValue Res;
 
-    if (cast<ConstantSDNode>(N1)->isNullValue()) {
-      //insert zero
-      SDValue Mask = DAG.getNode(ISD::SHL, dl, MVT::i32, DAG.getConstant(1, MVT::i32), N2);
-      SDValue NegMask = DAG.getNOT(dl, Mask, MVT::i32);
-      Res = DAG.getNode(ISD::AND, dl, MVT::i32, NegMask, TransN0);
-    }
-    else {
-      //insert one
-      SDValue Mask = DAG.getNode(ISD::SHL, dl, MVT::i32, DAG.getConstant(1, MVT::i32), N2);
-      Res = DAG.getNode(ISD::OR, dl, MVT::i32, Mask, TransN0);
+    if (isa<ConstantSDNode>(N1)) {
+      if (cast<ConstantSDNode>(N1)->isNullValue()) {
+        //insert zero
+        SDValue Mask = DAG.getNode(ISD::SHL, dl, MVT::i32, DAG.getConstant(1, MVT::i32), N2);
+        SDValue NegMask = DAG.getNOT(dl, Mask, MVT::i32);
+        Res = DAG.getNode(ISD::AND, dl, MVT::i32, NegMask, TransN0);
+      }
+      else {
+        //insert one
+        SDValue Mask = DAG.getNode(ISD::SHL, dl, MVT::i32, DAG.getConstant(1, MVT::i32), N2);
+        Res = DAG.getNode(ISD::OR, dl, MVT::i32, Mask, TransN0);
+      }
+    } else {
+      // Elt is not a constant node
+      // Mask = NOT(SHL(ZEXT(NOT(elt), i32), idx))
+      // return AND(Vector, Mask)
+      SDValue Zext = DAG.getNode(ISD::ZERO_EXTEND, dl, MVT::i32,
+                                 DAG.getNOT(dl, N1, N1.getValueType()));
+      SDValue Mask = DAG.getNOT(dl, DAG.getNode(ISD::SHL, dl, MVT::i32, Zext, N2),
+                                MVT::i32);
+      Res = DAG.getNode(ISD::AND, dl, MVT::i32, Mask, TransN0);
     }
 
     // Cast back
@@ -233,6 +244,23 @@ static SDValue PXLowerEXTRACT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) {
 
   llvm_unreachable("lowering extract_vector_elt for unsupported type");
   return SDValue();
+}
+
+static SDValue PXLowerSCALAR_TO_VECTOR(SDValue Op, SelectionDAG &DAG) {
+  SDLoc dl(Op);
+  MVT VecVT = Op.getSimpleValueType();
+  SDValue Val = Op.getOperand(0);
+  EVT EltVT = VecVT.getVectorElementType();
+
+  assert(EltVT.isInteger() && Val.getValueType().bitsGE(EltVT) &&
+         "incorrect scalar_to_vector parameters");
+  if (VecVT == MVT::v32i1) {
+    SDValue Trunc = DAG.getNode(ISD::TRUNCATE, dl, MVT::i1, Val);
+    SDValue Ext = DAG.getNode(ISD::ANY_EXTEND, dl, MVT::i32, Trunc);
+    return DAG.getNode(ISD::BITCAST, dl, MVT::v32i1, Ext);
+  }
+
+  llvm_unreachable("lowering unsupported scalar_to_vector");
 }
 
 //get zero vector for parabix
@@ -301,5 +329,6 @@ SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) 
   case ISD::SRL:                return PXLowerShift(Op, DAG);
   case ISD::INSERT_VECTOR_ELT:  return PXLowerINSERT_VECTOR_ELT(Op, DAG);
   case ISD::EXTRACT_VECTOR_ELT: return PXLowerEXTRACT_VECTOR_ELT(Op, DAG);
+  case ISD::SCALAR_TO_VECTOR:   return PXLowerSCALAR_TO_VECTOR(Op, DAG);
   }
 }
