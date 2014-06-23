@@ -9,6 +9,7 @@ entry:
   %c = insertelement <32 x i1> %a, i1 %b, i32 20
 
   store <32 x i1> %c, <32 x i1>* %P
+  ;CHECK: movl $13074656
   ret void
 }
 

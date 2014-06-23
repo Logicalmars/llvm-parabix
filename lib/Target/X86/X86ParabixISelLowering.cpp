@@ -205,18 +205,19 @@ static SDValue PXLowerINSERT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) {
         SDValue Mask = DAG.getNode(ISD::SHL, dl, MVT::i32, DAG.getConstant(1, MVT::i32), N2);
         SDValue NegMask = DAG.getNOT(dl, Mask, MVT::i32);
         Res = DAG.getNode(ISD::AND, dl, MVT::i32, NegMask, TransN0);
-      }
-      else {
+      } else {
         //insert one
         SDValue Mask = DAG.getNode(ISD::SHL, dl, MVT::i32, DAG.getConstant(1, MVT::i32), N2);
         Res = DAG.getNode(ISD::OR, dl, MVT::i32, Mask, TransN0);
       }
     } else {
       // Elt is not a constant node
-      // Mask = NOT(SHL(ZEXT(NOT(elt), i32), idx))
+      // Mask = NOT(SHL(ZEXT(NOT(elt, i1), i32), idx))
       // return AND(Vector, Mask)
-      SDValue Zext = DAG.getNode(ISD::ZERO_EXTEND, dl, MVT::i32,
-                                 DAG.getNOT(dl, N1, N1.getValueType()));
+      // NOT is sensitive of bit width
+      SDValue NotV = DAG.getNode(ISD::AND, dl, MVT::i8, DAG.getConstant(1, MVT::i8),
+                                 DAG.getNOT(dl, N1, MVT::i8));
+      SDValue Zext = DAG.getNode(ISD::ZERO_EXTEND, dl, MVT::i32, NotV);
       SDValue Mask = DAG.getNOT(dl, DAG.getNode(ISD::SHL, dl, MVT::i32, Zext, N2),
                                 MVT::i32);
       Res = DAG.getNode(ISD::AND, dl, MVT::i32, Mask, TransN0);
@@ -237,9 +238,11 @@ static SDValue PXLowerEXTRACT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) {
   SDValue Idx = Op.getOperand(1);
 
   if (VecVT == MVT::v32i1) {
+    //TRUNC(AND(1, SRL(FULL_REG(VecVT), Idx)), i8)
     SDValue TransV = DAG.getNode(ISD::BITCAST, dl, MVT::i32, Vec);
     SDValue ShiftV = DAG.getNode(ISD::SRL, dl, MVT::i32, TransV, Idx);
-    return DAG.getNode(ISD::TRUNCATE, dl, MVT::i1, ShiftV);
+    return DAG.getNode(ISD::TRUNCATE, dl, MVT::i8,
+                       DAG.getNode(ISD::AND, dl, MVT::i32, ShiftV, DAG.getConstant(1, MVT::i32)));
   }
 
   llvm_unreachable("lowering extract_vector_elt for unsupported type");
@@ -255,7 +258,8 @@ static SDValue PXLowerSCALAR_TO_VECTOR(SDValue Op, SelectionDAG &DAG) {
   assert(EltVT.isInteger() && Val.getValueType().bitsGE(EltVT) &&
          "incorrect scalar_to_vector parameters");
   if (VecVT == MVT::v32i1) {
-    SDValue Trunc = DAG.getNode(ISD::TRUNCATE, dl, MVT::i1, Val);
+    SDValue Trunc = DAG.getNode(ISD::AND, dl, MVT::i8, DAG.getConstant(1, MVT::i8),
+                                DAG.getNode(ISD::TRUNCATE, dl, MVT::i8, Val));
     SDValue Ext = DAG.getNode(ISD::ANY_EXTEND, dl, MVT::i32, Trunc);
     return DAG.getNode(ISD::BITCAST, dl, MVT::v32i1, Ext);
   }
