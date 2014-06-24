@@ -1,11 +1,12 @@
 #include "stdio.h"
+#define TEST test_select
 
-extern void test(int* p);
+extern void TEST(int* p);
 
 int main()
 {
   int a;
-  test(&a);
+  TEST(&a);
   printf("Test res: %d\n", a);
   return 0;
 }

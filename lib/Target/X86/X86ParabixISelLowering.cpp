@@ -130,7 +130,28 @@ static void resetOperations()
   //VSELECT
 }
 
+//v32i1 => i32, v32i2 => i64, etc
+static MVT getFullRegisterType(MVT VT) {
+  MVT castType;
+  if (VT.is32BitVector())
+    castType = MVT::i32;
+  else if (VT.is64BitVector())
+    castType = MVT::i64;
+  else
+    llvm_unreachable("unsupported parabix vector width");
+
+  return castType;
+}
+
+static SDValue getFullRegister(SDValue Op, SelectionDAG &DAG) {
+  MVT VT = Op.getSimpleValueType();
+  SDLoc dl(Op);
+
+  return DAG.getNode(ISD::BITCAST, dl, getFullRegisterType(VT), Op);
+}
+
 //Bitcast this vector to a full length integer and then do one op
+//Lookup op in CAOops map
 static SDValue lowerWithCastAndOp(SDValue Op, SelectionDAG &DAG) {
   SDLoc dl(Op);
   MVT VT = Op.getSimpleValueType();
@@ -140,17 +161,31 @@ static SDValue lowerWithCastAndOp(SDValue Op, SelectionDAG &DAG) {
 
   assert(CAOops.find(kind) != CAOops.end() && "Undefined cast and op kind");
 
-  MVT castType;
-  if (VT.is32BitVector())
-    castType = MVT::i32;
-  else if (VT.is64BitVector())
-    castType = MVT::i64;
-  else
-    llvm_unreachable("unsupported parabix vector width");
-
+  MVT castType = getFullRegisterType(VT);
   SDValue transA = DAG.getNode(ISD::BITCAST, dl, castType, A);
   SDValue transB = DAG.getNode(ISD::BITCAST, dl, castType, B);
   SDValue res = DAG.getNode(CAOops[kind], dl, castType, transA, transB);
+
+  return DAG.getNode(ISD::BITCAST, dl, VT, res);
+}
+
+//Don't do the lookup, use NewOp on casted operands.
+//If swap is set true, will swap operands
+static SDValue lowerWithCastAndOp(SDValue Op, SelectionDAG &DAG,
+                                  ISD::NodeType NewOp, bool Swap=false) {
+  SDLoc dl(Op);
+  MVT VT = Op.getSimpleValueType();
+  SDValue A = Op.getOperand(0);
+  SDValue B = Op.getOperand(1);
+
+  MVT castType = getFullRegisterType(VT);
+  SDValue transA = DAG.getNode(ISD::BITCAST, dl, castType, A);
+  SDValue transB = DAG.getNode(ISD::BITCAST, dl, castType, B);
+  SDValue res;
+  if (!Swap)
+    res = DAG.getNode(NewOp, dl, castType, transA, transB);
+  else
+    res = DAG.getNode(NewOp, dl, castType, transB, transA);
 
   return DAG.getNode(ISD::BITCAST, dl, VT, res);
 }
@@ -282,13 +317,27 @@ static SDValue getPXZeroVector(EVT VT, const X86Subtarget *Subtarget,
   return DAG.getNode(ISD::BITCAST, dl, VT, Vec);
 }
 
+static SDValue getPXOnesVector(EVT VT, const X86Subtarget *Subtarget,
+                             SelectionDAG &DAG, SDLoc dl) {
+  assert(VT.isParabixVector() && "This function only lower parabix vectors");
+
+  SDValue Vec;
+  if (VT.isSimple() && VT.getSimpleVT().is32BitVector()) {
+    // Careful here, don't use TargetConstant until you are sure.
+    Vec = DAG.getConstant(-1, MVT::i32);
+  } else
+    llvm_unreachable("Unexpected vector type");
+
+  return DAG.getNode(ISD::BITCAST, dl, VT, Vec);
+}
+
 SDValue
 X86TargetLowering::PXLowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const {
   SDLoc dl(Op);
 
   MVT VT = Op.getSimpleValueType();
   //MVT ExtVT = VT.getVectorElementType();
-  //unsigned NumElems = Op.getNumOperands();
+  unsigned NumElems = Op.getNumOperands();
 
   // Vectors containing all zeros can be matched by pxor and xorps later
   if (ISD::isBuildVectorAllZeros(Op.getNode())) {
@@ -300,7 +349,70 @@ X86TargetLowering::PXLowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const {
     return getPXZeroVector(VT, Subtarget, DAG, dl);
   }
 
+  if (ISD::isBuildVectorAllOnes(Op.getNode())) {
+    return getPXOnesVector(VT, Subtarget, DAG, dl);
+  }
+
+
+  if (VT == MVT::v32i1) {
+    //Brutely insert element
+    SDValue Base = DAG.getNode(ISD::BITCAST, dl, MVT::v32i1,
+                               DAG.getConstant(0, MVT::i32));
+    for (unsigned i = 0; i < NumElems; ++i) {
+      SDValue Elt = Op.getOperand(i);
+      if (Elt.getOpcode() == ISD::UNDEF)
+        continue;
+      Base = DAG.getNode(ISD::INSERT_VECTOR_ELT, dl, MVT::v32i1, Base, Elt,
+                         DAG.getConstant(i, MVT::i32));
+    }
+
+    return Base;
+  }
+
   llvm_unreachable("lowering build_vector for unsupported type");
+  return SDValue();
+}
+
+static SDValue PXLowerSETCC(SDValue Op, SelectionDAG &DAG) {
+  MVT VT = Op.getSimpleValueType();
+  SDLoc dl(Op);
+  SDValue Op0 = Op.getOperand(0);
+  SDValue Op1 = Op.getOperand(1);
+  ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(2))->get();
+  SDValue NEVec, TransA, TransB, Res, NotOp1, NotOp0;
+
+  if (VT == MVT::v32i1) {
+    switch (CC) {
+    default: llvm_unreachable("Can't lower this parabix SETCC");
+    case ISD::SETUNE:
+    case ISD::SETNE:    return lowerWithCastAndOp(Op, DAG, ISD::XOR);
+    case ISD::SETUEQ:
+    case ISD::SETEQ:
+      NEVec = lowerWithCastAndOp(Op, DAG, ISD::XOR);
+      return DAG.getNOT(dl, NEVec, VT);
+    case ISD::SETLT:
+    case ISD::SETUGT:
+      NotOp1 = DAG.getNOT(dl, Op1, VT);
+      TransA = DAG.getNode(ISD::BITCAST, dl, MVT::i32, Op0);
+      TransB = DAG.getNode(ISD::BITCAST, dl, MVT::i32, NotOp1);
+      Res = DAG.getNode(ISD::AND, dl, MVT::i32, TransA, TransB);
+      return DAG.getNode(ISD::BITCAST, dl, MVT::v32i1, Res);
+    case ISD::SETGT:
+    case ISD::SETULT:
+      NotOp0 = DAG.getNOT(dl, getFullRegister(Op0, DAG), MVT::i32);
+      Res = DAG.getNode(ISD::AND, dl, MVT::i32, NotOp0,
+                                getFullRegister(Op1, DAG));
+      return DAG.getNode(ISD::BITCAST, dl, MVT::v32i1, Res);
+    case ISD::SETLE:
+    case ISD::SETUGE:
+      return Op0;
+    case ISD::SETGE:
+    case ISD::SETULE:
+      return DAG.getNOT(dl, Op0, VT);
+    }
+  }
+
+  llvm_unreachable("only lowering parabix SETCC");
   return SDValue();
 }
 
@@ -334,5 +446,6 @@ SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) 
   case ISD::INSERT_VECTOR_ELT:  return PXLowerINSERT_VECTOR_ELT(Op, DAG);
   case ISD::EXTRACT_VECTOR_ELT: return PXLowerEXTRACT_VECTOR_ELT(Op, DAG);
   case ISD::SCALAR_TO_VECTOR:   return PXLowerSCALAR_TO_VECTOR(Op, DAG);
+  case ISD::SETCC:              return PXLowerSETCC(Op, DAG);
   }
 }

@@ -1568,6 +1568,7 @@ void X86TargetLowering::resetOperationActions() {
   setOperationAction(ISD::EXTRACT_VECTOR_ELT, MVT::v32i1, Custom);
   setOperationAction(ISD::INSERT_VECTOR_ELT, MVT::v32i1, Custom);
   setOperationAction(ISD::SCALAR_TO_VECTOR, MVT::v32i1, Custom);
+  setOperationAction(ISD::SETCC, MVT::v32i1, Custom);
   setOperationAction(ISD::LOAD, MVT::v32i1, Custom);
   setOperationAction(ISD::STORE, MVT::v32i1, Custom);
 
@@ -14478,12 +14479,16 @@ static SDValue LowerFSINCOS(SDValue Op, const X86Subtarget *Subtarget,
 SDValue X86TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   // Redirect Parabix Operation Lowering
   // TODO: Combine these logic together.
-  if (Op.getValueType().isParabixVector())
+  // SETCC would always return i1 vector, but it may not be parabix op
+  if (Op.getOpcode() != ISD::SETCC && Op.getValueType().isParabixVector())
     return LowerParabixOperation(Op, DAG);
   if (Op.getOpcode() == ISD::STORE &&
       Op.getOperand(1).getValueType().isParabixVector())
     return LowerParabixOperation(Op, DAG);
   if (Op.getOpcode() == ISD::EXTRACT_VECTOR_ELT &&
+      Op.getOperand(0).getValueType().isParabixVector())
+    return LowerParabixOperation(Op, DAG);
+  if (Op.getOpcode() == ISD::SETCC &&
       Op.getOperand(0).getValueType().isParabixVector())
     return LowerParabixOperation(Op, DAG);
 
