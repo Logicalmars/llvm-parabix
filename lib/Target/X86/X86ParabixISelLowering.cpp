@@ -384,9 +384,7 @@ static SDValue PXLowerSETCC(SDValue Op, SelectionDAG &DAG) {
   if (VT == MVT::v32i1) {
     switch (CC) {
     default: llvm_unreachable("Can't lower this parabix SETCC");
-    case ISD::SETUNE:
     case ISD::SETNE:    return lowerWithCastAndOp(Op, DAG, ISD::XOR);
-    case ISD::SETUEQ:
     case ISD::SETEQ:
       NEVec = lowerWithCastAndOp(Op, DAG, ISD::XOR);
       return DAG.getNOT(dl, NEVec, VT);
@@ -405,10 +403,12 @@ static SDValue PXLowerSETCC(SDValue Op, SelectionDAG &DAG) {
       return DAG.getNode(ISD::BITCAST, dl, MVT::v32i1, Res);
     case ISD::SETLE:
     case ISD::SETUGE:
-      return Op0;
+      Res = DAG.getNode(ISD::SETCC, dl, VT, Op0, Op1, DAG.getCondCode(ISD::SETGT));
+      return DAG.getNOT(dl, Res, VT);
     case ISD::SETGE:
     case ISD::SETULE:
-      return DAG.getNOT(dl, Op0, VT);
+      Res = DAG.getNode(ISD::SETCC, dl, VT, Op0, Op1, DAG.getCondCode(ISD::SETLT));
+      return DAG.getNOT(dl, Res, VT);
     }
   }
 

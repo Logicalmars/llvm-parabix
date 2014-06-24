@@ -77,7 +77,7 @@ entry:
   %one = bitcast i32 -1 to <32 x i1>
 
   %d = icmp ult <32 x i1> %a, %b
-  %e = icmp slt <32 x i1> %a, %b
+  %e = icmp sle <32 x i1> %a, %b
 
   %x = xor <32 x i1> %e, %one
   %eq = icmp eq <32 x i1> %d, %x
