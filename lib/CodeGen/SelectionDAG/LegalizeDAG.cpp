@@ -1857,7 +1857,7 @@ ExpandBVWithShuffles(SDNode *Node, SelectionDAG &DAG,
         SmallVector<int, 16> FinalIndices;
         FinalIndices.reserve(IntermedVals[i].second.size() +
                              IntermedVals[i+1].second.size());
-        
+
         int k = 0;
         for (unsigned j = 0, f = IntermedVals[i].second.size(); j != f;
              ++j, ++k) {
