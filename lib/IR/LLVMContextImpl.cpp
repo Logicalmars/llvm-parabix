@@ -71,7 +71,7 @@ LLVMContextImpl::~LLVMContextImpl() {
   // the container. Avoid iterators during this operation:
   while (!OwnedModules.empty())
     delete *OwnedModules.begin();
-  
+
   // Free the constants.  This is important to do here to ensure that they are
   // freed before the LeakDetector is torn down.
   std::for_each(ExprConstants.map_begin(), ExprConstants.map_end(),
@@ -92,7 +92,7 @@ LLVMContextImpl::~LLVMContextImpl() {
   InlineAsms.freeConstants();
   DeleteContainerSeconds(IntConstants);
   DeleteContainerSeconds(FPConstants);
-  
+
   for (StringMap<ConstantDataSequential*>::iterator I = CDSConstants.begin(),
        E = CDSConstants.end(); I != E; ++I)
     delete I->second;
