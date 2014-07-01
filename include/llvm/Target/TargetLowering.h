@@ -462,6 +462,12 @@ public:
   /// sequence, or the target has a custom expander for it.
   LegalizeAction getOperationAction(unsigned Op, EVT VT) const {
     if (VT.isExtended()) return Expand;
+    //FIXME: Parabix hack here, i2/i4 is not extended now, but it
+    //seems LLVM has an assumption that i2/i4 will always expand.
+    if (VT.getSimpleVT() == MVT::i2 ||
+        VT.getSimpleVT() == MVT::i4)
+      return Expand;
+
     // If a target-specific SDNode requires legalization, require the target
     // to provide custom legalization for it.
     if (Op > array_lengthof(OpActions[0])) return Custom;

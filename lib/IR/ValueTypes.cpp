@@ -184,6 +184,8 @@ Type *EVT::getTypeForEVT(LLVMContext &Context) const {
     return LLVMTy;
   case MVT::isVoid:  return Type::getVoidTy(Context);
   case MVT::i1:      return Type::getInt1Ty(Context);
+  case MVT::i2:      return Type::getInt2Ty(Context);
+  case MVT::i4:      return Type::getInt4Ty(Context);
   case MVT::i8:      return Type::getInt8Ty(Context);
   case MVT::i16:     return Type::getInt16Ty(Context);
   case MVT::i32:     return Type::getInt32Ty(Context);
