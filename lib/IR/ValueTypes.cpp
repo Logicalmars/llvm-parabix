@@ -237,19 +237,26 @@ Type *EVT::getTypeForEVT(LLVMContext &Context) const {
   case MVT::v32i32:   return VectorType::get(Type::getInt32Ty(Context), 32);
   case MVT::v16i64:   return VectorType::get(Type::getInt64Ty(Context), 16);
 
-
+  case MVT::v1f16:   return VectorType::get(Type::getHalfTy(Context), 1);
   case MVT::v2f16:   return VectorType::get(Type::getHalfTy(Context), 2);
-  case MVT::v4f16:   return VectorType::get(Type::getHalfTy(Context), 4);
-  case MVT::v8f16:   return VectorType::get(Type::getHalfTy(Context), 8);
   case MVT::v1f32:   return VectorType::get(Type::getFloatTy(Context), 1);
+  case MVT::v4f16:   return VectorType::get(Type::getHalfTy(Context), 4);
   case MVT::v2f32:   return VectorType::get(Type::getFloatTy(Context), 2);
-  case MVT::v4f32:   return VectorType::get(Type::getFloatTy(Context), 4);
-  case MVT::v8f32:   return VectorType::get(Type::getFloatTy(Context), 8);
-  case MVT::v16f32:   return VectorType::get(Type::getFloatTy(Context), 16);
   case MVT::v1f64:   return VectorType::get(Type::getDoubleTy(Context), 1);
+  case MVT::v8f16:   return VectorType::get(Type::getHalfTy(Context), 8);
+  case MVT::v4f32:   return VectorType::get(Type::getFloatTy(Context), 4);
   case MVT::v2f64:   return VectorType::get(Type::getDoubleTy(Context), 2);
+  case MVT::v16f16:   return VectorType::get(Type::getHalfTy(Context), 16);
+  case MVT::v8f32:   return VectorType::get(Type::getFloatTy(Context), 8);
   case MVT::v4f64:   return VectorType::get(Type::getDoubleTy(Context), 4);
+  case MVT::v32f16:   return VectorType::get(Type::getHalfTy(Context), 32);
+  case MVT::v16f32:   return VectorType::get(Type::getFloatTy(Context), 16);
   case MVT::v8f64:   return VectorType::get(Type::getDoubleTy(Context), 8);
+  case MVT::v64f16:   return VectorType::get(Type::getHalfTy(Context), 64);
+  case MVT::v32f32:   return VectorType::get(Type::getFloatTy(Context), 32);
+  case MVT::v16f64:   return VectorType::get(Type::getDoubleTy(Context), 16);
+
+
   case MVT::Metadata: return Type::getMetadataTy(Context);
  }
 }
