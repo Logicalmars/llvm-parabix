@@ -17,6 +17,7 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Type.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/Debug.h"
 using namespace llvm;
 
 EVT EVT::changeExtendedVectorElementTypeToInteger() const {
@@ -180,6 +181,7 @@ std::string EVT::getEVTString() const {
 Type *EVT::getTypeForEVT(LLVMContext &Context) const {
   switch (V.SimpleTy) {
   default:
+    dbgs() << "EVT String: " << getEVTString() << '\n';
     assert(isExtended() && "Type is not extended!");
     return LLVMTy;
   case MVT::isVoid:  return Type::getVoidTy(Context);
@@ -191,6 +193,9 @@ Type *EVT::getTypeForEVT(LLVMContext &Context) const {
   case MVT::i32:     return Type::getInt32Ty(Context);
   case MVT::i64:     return Type::getInt64Ty(Context);
   case MVT::i128:    return IntegerType::get(Context, 128);
+  case MVT::i256:    return IntegerType::get(Context, 256);
+  case MVT::i512:    return IntegerType::get(Context, 512);
+  case MVT::i1024:   return IntegerType::get(Context, 1024);
   case MVT::f16:     return Type::getHalfTy(Context);
   case MVT::f32:     return Type::getFloatTy(Context);
   case MVT::f64:     return Type::getDoubleTy(Context);
@@ -201,41 +206,70 @@ Type *EVT::getTypeForEVT(LLVMContext &Context) const {
 
   case MVT::v1i1:   return VectorType::get(Type::getInt1Ty(Context), 1);
   case MVT::v2i1:   return VectorType::get(Type::getInt1Ty(Context), 2);
+  case MVT::v1i2:   return VectorType::get(Type::getIntNTy(Context, 2), 1);
   case MVT::v4i1:   return VectorType::get(Type::getInt1Ty(Context), 4);
+  case MVT::v2i2:   return VectorType::get(Type::getIntNTy(Context, 2), 2);
+  case MVT::v1i4:   return VectorType::get(Type::getIntNTy(Context, 4), 1);
   case MVT::v8i1:   return VectorType::get(Type::getInt1Ty(Context), 8);
+  case MVT::v4i2:   return VectorType::get(Type::getIntNTy(Context, 2), 4);
+  case MVT::v2i4:   return VectorType::get(Type::getIntNTy(Context, 4), 2);
   case MVT::v1i8:   return VectorType::get(Type::getInt8Ty(Context), 1);
   case MVT::v16i1:   return VectorType::get(Type::getInt1Ty(Context), 16);
+  case MVT::v8i2:   return VectorType::get(Type::getIntNTy(Context, 2), 8);
+  case MVT::v4i4:   return VectorType::get(Type::getIntNTy(Context, 4), 4);
   case MVT::v2i8:   return VectorType::get(Type::getInt8Ty(Context), 2);
   case MVT::v1i16:   return VectorType::get(Type::getInt16Ty(Context), 1);
   case MVT::v32i1:   return VectorType::get(Type::getInt1Ty(Context), 32);
+  case MVT::v16i2:   return VectorType::get(Type::getIntNTy(Context, 2), 16);
+  case MVT::v8i4:   return VectorType::get(Type::getIntNTy(Context, 4), 8);
   case MVT::v4i8:   return VectorType::get(Type::getInt8Ty(Context), 4);
   case MVT::v2i16:   return VectorType::get(Type::getInt16Ty(Context), 2);
   case MVT::v1i32:   return VectorType::get(Type::getInt32Ty(Context), 1);
   case MVT::v64i1:   return VectorType::get(Type::getInt1Ty(Context), 64);
+  case MVT::v32i2:   return VectorType::get(Type::getIntNTy(Context, 2), 32);
+  case MVT::v16i4:   return VectorType::get(Type::getIntNTy(Context, 4), 16);
   case MVT::v8i8:   return VectorType::get(Type::getInt8Ty(Context), 8);
   case MVT::v4i16:   return VectorType::get(Type::getInt16Ty(Context), 4);
   case MVT::v2i32:   return VectorType::get(Type::getInt32Ty(Context), 2);
   case MVT::v1i64:   return VectorType::get(Type::getInt64Ty(Context), 1);
   case MVT::v128i1:   return VectorType::get(Type::getInt1Ty(Context), 128);
+  case MVT::v64i2:   return VectorType::get(Type::getIntNTy(Context, 2), 64);
+  case MVT::v32i4:   return VectorType::get(Type::getIntNTy(Context, 4), 32);
   case MVT::v16i8:   return VectorType::get(Type::getInt8Ty(Context), 16);
   case MVT::v8i16:   return VectorType::get(Type::getInt16Ty(Context), 8);
   case MVT::v4i32:   return VectorType::get(Type::getInt32Ty(Context), 4);
   case MVT::v2i64:   return VectorType::get(Type::getInt64Ty(Context), 2);
+  case MVT::v1i128:   return VectorType::get(Type::getIntNTy(Context, 128), 1);
   case MVT::v256i1:   return VectorType::get(Type::getInt1Ty(Context), 256);
+  case MVT::v128i2:   return VectorType::get(Type::getIntNTy(Context, 2), 128);
+  case MVT::v64i4:   return VectorType::get(Type::getIntNTy(Context, 4), 64);
   case MVT::v32i8:   return VectorType::get(Type::getInt8Ty(Context), 32);
   case MVT::v16i16:   return VectorType::get(Type::getInt16Ty(Context), 16);
   case MVT::v8i32:   return VectorType::get(Type::getInt32Ty(Context), 8);
   case MVT::v4i64:   return VectorType::get(Type::getInt64Ty(Context), 4);
+  case MVT::v2i128:   return VectorType::get(Type::getIntNTy(Context, 128), 2);
+  case MVT::v1i256:   return VectorType::get(Type::getIntNTy(Context, 256), 1);
   case MVT::v512i1:   return VectorType::get(Type::getInt1Ty(Context), 512);
+  case MVT::v256i2:   return VectorType::get(Type::getIntNTy(Context, 2), 256);
+  case MVT::v128i4:   return VectorType::get(Type::getIntNTy(Context, 4), 128);
   case MVT::v64i8:   return VectorType::get(Type::getInt8Ty(Context), 64);
   case MVT::v32i16:   return VectorType::get(Type::getInt16Ty(Context), 32);
   case MVT::v16i32:   return VectorType::get(Type::getInt32Ty(Context), 16);
   case MVT::v8i64:   return VectorType::get(Type::getInt64Ty(Context), 8);
+  case MVT::v4i128:   return VectorType::get(Type::getIntNTy(Context, 128), 4);
+  case MVT::v2i256:   return VectorType::get(Type::getIntNTy(Context, 256), 2);
+  case MVT::v1i512:   return VectorType::get(Type::getIntNTy(Context, 512), 1);
   case MVT::v1024i1:   return VectorType::get(Type::getInt1Ty(Context), 1024);
+  case MVT::v512i2:   return VectorType::get(Type::getIntNTy(Context, 2), 512);
+  case MVT::v256i4:   return VectorType::get(Type::getIntNTy(Context, 4), 256);
   case MVT::v128i8:   return VectorType::get(Type::getInt8Ty(Context), 128);
   case MVT::v64i16:   return VectorType::get(Type::getInt16Ty(Context), 64);
   case MVT::v32i32:   return VectorType::get(Type::getInt32Ty(Context), 32);
   case MVT::v16i64:   return VectorType::get(Type::getInt64Ty(Context), 16);
+  case MVT::v8i128:   return VectorType::get(Type::getIntNTy(Context, 128), 8);
+  case MVT::v4i256:   return VectorType::get(Type::getIntNTy(Context, 256), 4);
+  case MVT::v2i512:   return VectorType::get(Type::getIntNTy(Context, 512), 2);
+  case MVT::v1i1024:   return VectorType::get(Type::getIntNTy(Context, 1024), 1);
 
   case MVT::v1f16:   return VectorType::get(Type::getHalfTy(Context), 1);
   case MVT::v2f16:   return VectorType::get(Type::getHalfTy(Context), 2);
