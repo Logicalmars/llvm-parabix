@@ -383,7 +383,7 @@ static void InitLibcallNames(const char **Names, const TargetMachine &TM) {
   Names[RTLIB::SYNC_FETCH_AND_UMIN_4] = "__sync_fetch_and_umin_4";
   Names[RTLIB::SYNC_FETCH_AND_UMIN_8] = "__sync_fetch_and_umin_8";
   Names[RTLIB::SYNC_FETCH_AND_UMIN_16] = "__sync_fetch_and_umin_16";
-  
+
   if (Triple(TM.getTargetTriple()).getEnvironment() == Triple::GNU) {
     Names[RTLIB::SINCOS_F32] = "sincosf";
     Names[RTLIB::SINCOS_F64] = "sincos";
@@ -1097,7 +1097,8 @@ void TargetLoweringBase::computeRegisterProperties() {
         // of elements, with a wider element type.
         if (SVT.getVectorElementType().getSizeInBits() > EltVT.getSizeInBits()
             && SVT.getVectorNumElements() == NElts &&
-            isTypeLegal(SVT) && SVT.getScalarType().isInteger()) {
+            isTypeLegal(SVT) && SVT.getScalarType().isInteger() &&
+            !SVT.isParabixVector()) {
           TransformToType[i] = SVT;
           RegisterTypeForVT[i] = SVT;
           NumRegistersForVT[i] = 1;
@@ -1114,7 +1115,7 @@ void TargetLoweringBase::computeRegisterProperties() {
         MVT SVT = (MVT::SimpleValueType)nVT;
         if (SVT.getVectorElementType() == EltVT &&
             SVT.getVectorNumElements() > NElts &&
-            isTypeLegal(SVT)) {
+            isTypeLegal(SVT) && !SVT.isParabixVector()) {
           TransformToType[i] = SVT;
           RegisterTypeForVT[i] = SVT;
           NumRegistersForVT[i] = 1;

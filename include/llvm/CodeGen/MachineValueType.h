@@ -242,6 +242,10 @@ namespace llvm {
       return (SimpleTy == MVT::v32i1 || SimpleTy == MVT::v64i1);
     }
 
+    bool isParabixValue() const {
+      return (SimpleTy == MVT::v1i1 || SimpleTy == MVT::v1i2 || SimpleTy == MVT::v2i2 || SimpleTy == MVT::v1i4 || SimpleTy == MVT::v4i2 || SimpleTy == MVT::v2i4 || SimpleTy == MVT::v8i2 || SimpleTy == MVT::v4i4 || SimpleTy == MVT::v1f16 || SimpleTy == MVT::v16i2 || SimpleTy == MVT::v8i4 || SimpleTy == MVT::v32i2 || SimpleTy == MVT::v16i4 || SimpleTy == MVT::v128i1 || SimpleTy == MVT::v64i2 || SimpleTy == MVT::v32i4 || SimpleTy == MVT::v1i128 || SimpleTy == MVT::v256i1 || SimpleTy == MVT::v128i2 || SimpleTy == MVT::v64i4 || SimpleTy == MVT::v2i128 || SimpleTy == MVT::v1i256 || SimpleTy == MVT::v16f16 || SimpleTy == MVT::v512i1 || SimpleTy == MVT::v256i2 || SimpleTy == MVT::v128i4 || SimpleTy == MVT::v64i8 || SimpleTy == MVT::v4i128 || SimpleTy == MVT::v2i256 || SimpleTy == MVT::v1i512 || SimpleTy == MVT::v32f16 || SimpleTy == MVT::v1024i1 || SimpleTy == MVT::v512i2 || SimpleTy == MVT::v256i4 || SimpleTy == MVT::v128i8 || SimpleTy == MVT::v64i16 || SimpleTy == MVT::v32i32 || SimpleTy == MVT::v8i128 || SimpleTy == MVT::v4i256 || SimpleTy == MVT::v2i512 || SimpleTy == MVT::v1i1024 || SimpleTy == MVT::v64f16 || SimpleTy == MVT::v32f32 || SimpleTy == MVT::v16f64);
+    }
+
 
     /// is1BitVector - Return true if this is a 1-bit vector type.
     bool is1BitVector() const {
