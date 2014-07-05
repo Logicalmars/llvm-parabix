@@ -333,7 +333,7 @@ def GR32 : RegisterClass<"X86", [i32], 32,
                               R8D, R9D, R10D, R11D, R14D, R15D, R12D, R13D)>;
 
 // GR32 Extended, used for parabix
-def GR32X : RegisterClass<"X86", [v32i1], 32,
+def GR32X : RegisterClass<"X86", [v32i1, i32], 32,
                          (add EAX, ECX, EDX, ESI, EDI, EBX, EBP, ESP,
                               R8D, R9D, R10D, R11D, R14D, R15D, R12D, R13D)>;
 

@@ -37,6 +37,9 @@ def RetCC_X86Common : CallingConv<[
   CCIfType<[i32], CCAssignToReg<[EAX, EDX, ECX]>>,
   CCIfType<[i64], CCAssignToReg<[RAX, RDX, RCX]>>,
 
+  //Parabix
+  CCIfType<[v32i1], CCAssignToReg<[EAX, EDX, ECX]>>,
+
   // Vector types are returned in XMM0 and XMM1, when they fit.  XMM2 and XMM3
   // can only be used by ABI non-compliant code. If the target doesn't have XMM
   // registers, it won't have vector types.
@@ -89,6 +92,9 @@ def RetCC_X86_32_Fast : CallingConv<[
   CCIfType<[i8],  CCAssignToReg<[AL, DL, CL]>>,
   CCIfType<[i16], CCAssignToReg<[AX, DX, CX]>>,
   CCIfType<[i32], CCAssignToReg<[EAX, EDX, ECX]>>,
+
+  //Parabix
+  CCIfType<[v32i1], CCAssignToReg<[EAX, EDX, ECX]>>,
 
   // Otherwise, it is the same as the common X86 calling convention.
   CCDelegateTo<RetCC_X86Common>
@@ -229,6 +235,9 @@ def CC_X86_64_C : CallingConv<[
   // The first 6 integer arguments are passed in integer registers.
   CCIfType<[i32], CCAssignToReg<[EDI, ESI, EDX, ECX, R8D, R9D]>>,
   CCIfType<[i64], CCAssignToReg<[RDI, RSI, RDX, RCX, R8 , R9 ]>>,
+
+  // Parabix
+  CCIfType<[v32i1], CCAssignToReg<[EDI, ESI, EDX, ECX, R8D, R9D]>>,
 
   // The first 8 MMX vector arguments are passed in XMM registers on Darwin.
   CCIfType<[x86mmx],

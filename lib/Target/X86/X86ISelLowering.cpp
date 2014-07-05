@@ -2303,6 +2303,8 @@ X86TargetLowering::LowerFormalArguments(SDValue Chain,
         RC = &X86::VK8RegClass;
       else if (RegVT == MVT::v16i1)
         RC = &X86::VK16RegClass;
+      else if (RegVT == MVT::v32i1)
+        RC = &X86::GR32XRegClass;
       else
         llvm_unreachable("Unknown argument type!");
 
