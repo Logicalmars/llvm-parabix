@@ -1554,6 +1554,9 @@ void X86TargetLowering::resetOperationActions() {
 
   // Should be a good place to put Parabix operations.
   // Like Add on v64i1
+  // Clear std::map here.
+  resetOperand0Action();
+
   setOperationAction(ISD::ADD, MVT::v32i1, Custom);
   setOperationAction(ISD::SUB, MVT::v32i1, Custom);
   setOperationAction(ISD::MUL, MVT::v32i1, Custom);
@@ -1571,6 +1574,11 @@ void X86TargetLowering::resetOperationActions() {
   setOperationAction(ISD::SETCC, MVT::v32i1, Custom);
   setOperationAction(ISD::LOAD, MVT::v32i1, Custom);
   setOperationAction(ISD::STORE, MVT::v32i1, Custom);
+  if (Subtarget->hasAVX2()) {
+    //TODO: make this statement more general
+    setOperand0Action(ISD::VSELECT, MVT::v32i1, Custom);
+    setOperand0Action(ISD::SIGN_EXTEND, MVT::v32i1, Custom);
+  }
 
   // We have target-specific dag combine patterns for the following nodes:
   setTargetDAGCombine(ISD::VECTOR_SHUFFLE);
@@ -14493,6 +14501,16 @@ SDValue X86TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   if (Op.getOpcode() == ISD::SETCC &&
       Op.getOperand(0).getValueType().isParabixVector())
     return LowerParabixOperation(Op, DAG);
+  //if (Op.getOpcode() == ISD::VSELECT) {
+    //for VSELECT, if the mask is v32i1, zext it to v32i8, otherwise
+    //it's legal.
+    //assert(Subtarget->hasAVX2() && "VSELECT v32i8 only valid in AVX2");
+
+    //if (Op.getOperand(0).getValueType().isParabixVector())
+      //return LowerParabixOperation(Op, DAG);
+    //else
+      //return Op;
+  //}
 
   switch (Op.getOpcode()) {
   default: llvm_unreachable("Should not custom lower this!");

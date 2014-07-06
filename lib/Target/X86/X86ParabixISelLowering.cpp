@@ -416,6 +416,24 @@ static SDValue PXLowerSETCC(SDValue Op, SelectionDAG &DAG) {
   return SDValue();
 }
 
+static SDValue PXLowerVSELECT(SDValue Op, SelectionDAG &DAG) {
+  MVT VT = Op.getSimpleValueType();
+  SDLoc dl(Op);
+
+  SDValue Mask = Op.getOperand(0);
+  SDValue Op0 = Op.getOperand(1);
+  SDValue Op1 = Op.getOperand(2);
+
+  if (Mask.getSimpleValueType() == MVT::v32i1) {
+    SDValue MaskExt = DAG.getNode(X86ISD::VZEXT, dl, MVT::v32i8, Mask);
+    return DAG.getNode(ISD::VSELECT, dl, VT, MaskExt, Op0, Op1);
+  }
+
+  llvm_unreachable("only lowering parabix VSELECT");
+  return SDValue();
+}
+
+
 ///Entrance for parabix lowering.
 SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) const {
   //NEED: setOperationAction in target specific lowering (X86ISelLowering.cpp)
@@ -447,5 +465,6 @@ SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) 
   case ISD::EXTRACT_VECTOR_ELT: return PXLowerEXTRACT_VECTOR_ELT(Op, DAG);
   case ISD::SCALAR_TO_VECTOR:   return PXLowerSCALAR_TO_VECTOR(Op, DAG);
   case ISD::SETCC:              return PXLowerSETCC(Op, DAG);
+  case ISD::VSELECT:            return PXLowerVSELECT(Op, DAG);
   }
 }

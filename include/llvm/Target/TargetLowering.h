@@ -475,6 +475,20 @@ public:
     return (LegalizeAction)OpActions[I][Op];
   }
 
+  /// Parabix: similar to getOperationAction, but always use
+  /// operand[0] as the VT here.
+  LegalizeAction getOperand0Action(ISD::NodeType Op, EVT VT) {
+    // FIXME: we only use operand0action for simpleTy for now.
+    if (VT.isExtended()) return Legal;
+
+    Operand0ActionsKeyTy key = std::make_pair(VT.getSimpleVT(), Op);
+    if (Operand0Actions.find(key) == Operand0Actions.end()) {
+      return Legal;
+    } else {
+      return Operand0Actions[key];
+    }
+  }
+
   /// Return true if the specified operation is legal on this target or can be
   /// made legal with custom lowering. This is used to help guide high-level
   /// lowering decisions.
@@ -1080,6 +1094,20 @@ protected:
     OpActions[(unsigned)VT.SimpleTy][Op] = (uint8_t)Action;
   }
 
+  /// Parabix
+  /// Indicate that the specified operation does not work with the
+  /// specified operand type, and indicate what to do about it.
+  void setOperand0Action(ISD::NodeType Op, MVT VT,
+                        LegalizeAction Action) {
+    assert(Op < array_lengthof(OpActions[0]) && "Op too large for the table");
+    Operand0ActionsKeyTy key = std::make_pair(VT, Op);
+    Operand0Actions[key] = Action;
+  }
+
+  void resetOperand0Action() {
+    Operand0Actions.clear();
+  }
+
   /// Indicate that the specified load with extension does not work with the
   /// specified type and indicate what to do about it.
   void setLoadExtAction(unsigned ExtType, MVT VT,
@@ -1567,6 +1595,10 @@ private:
   /// operations that are not should be described.  Note that operations on
   /// non-legal value types are not described here.
   uint8_t OpActions[MVT::LAST_VALUETYPE][ISD::BUILTIN_OP_END];
+
+  /// Same with OpActions, but for Operand(0)
+  typedef std::pair<MVT, ISD::NodeType> Operand0ActionsKeyTy;
+  std::map<Operand0ActionsKeyTy, LegalizeAction> Operand0Actions;
 
   /// For each load extension type and each value type, keep a LegalizeAction
   /// that indicates how instruction selection should deal with a load of a
