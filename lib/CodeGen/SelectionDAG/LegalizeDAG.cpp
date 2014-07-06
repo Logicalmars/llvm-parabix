@@ -1289,7 +1289,13 @@ void SelectionDAGLegalize::LegalizeOp(SDNode *Node) {
     if (Node->getOpcode() >= ISD::BUILTIN_OP_END) {
       Action = TargetLowering::Legal;
     } else {
-      Action = TLI.getOperationAction(Node->getOpcode(), Node->getValueType(0));
+      // Parabix: test if we want to custom it with operand0 action.
+      if (Node->getNumOperands() > 0) {
+        Action = TLI.getOperand0Action((ISD::NodeType) Node->getOpcode(), Node->getOperand(0).getValueType());
+        if (Action == TargetLowering::Legal)
+          Action = TLI.getOperationAction(Node->getOpcode(), Node->getValueType(0));
+      } else
+        Action = TLI.getOperationAction(Node->getOpcode(), Node->getValueType(0));
     }
     break;
   }
@@ -1380,6 +1386,8 @@ void SelectionDAGLegalize::LegalizeOp(SDNode *Node) {
     dbgs() << "NODE: ";
     Node->dump( &DAG);
     dbgs() << "\n";
+
+
 #endif
     llvm_unreachable("Do not know how to legalize this operator!");
 

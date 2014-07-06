@@ -477,15 +477,16 @@ public:
 
   /// Parabix: similar to getOperationAction, but always use
   /// operand[0] as the VT here.
-  LegalizeAction getOperand0Action(ISD::NodeType Op, EVT VT) {
+  LegalizeAction getOperand0Action(ISD::NodeType Op, EVT VT) const {
     // FIXME: we only use operand0action for simpleTy for now.
     if (VT.isExtended()) return Legal;
 
     Operand0ActionsKeyTy key = std::make_pair(VT.getSimpleVT(), Op);
-    if (Operand0Actions.find(key) == Operand0Actions.end()) {
+    auto iter = Operand0Actions.find(key);
+    if (iter == Operand0Actions.end()) {
       return Legal;
     } else {
-      return Operand0Actions[key];
+      return iter->second;
     }
   }
 

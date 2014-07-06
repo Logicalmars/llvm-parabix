@@ -425,14 +425,13 @@ static SDValue PXLowerVSELECT(SDValue Op, SelectionDAG &DAG) {
   SDValue Op1 = Op.getOperand(2);
 
   if (Mask.getSimpleValueType() == MVT::v32i1) {
-    SDValue MaskExt = DAG.getNode(X86ISD::VZEXT, dl, MVT::v32i8, Mask);
+    SDValue MaskExt = DAG.getNode(ISD::SIGN_EXTEND, dl, MVT::v32i8, Mask);
     return DAG.getNode(ISD::VSELECT, dl, VT, MaskExt, Op0, Op1);
   }
 
   llvm_unreachable("only lowering parabix VSELECT");
   return SDValue();
 }
-
 
 ///Entrance for parabix lowering.
 SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) const {
