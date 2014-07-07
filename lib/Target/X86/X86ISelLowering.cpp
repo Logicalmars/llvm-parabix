@@ -14501,11 +14501,12 @@ SDValue X86TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   if (Op.getOpcode() == ISD::SETCC &&
       Op.getOperand(0).getValueType().isParabixVector())
     return LowerParabixOperation(Op, DAG);
-  if (Op.getOpcode() == ISD::VSELECT) {
+  if (Op.getOpcode() == ISD::VSELECT &&
+      Op.getOperand(0).getSimpleValueType() == MVT::v32i1 &&
+      Op.getOperand(1).getSimpleValueType() == MVT::v32i8 &&
+      Subtarget->hasAVX2()) {
     //for VSELECT, if the mask is v32i1, zext it to v32i8, otherwise
     //it's legal.
-    assert(Op.getOperand(0).getSimpleValueType() == MVT::v32i1 &&
-           Subtarget->hasAVX2() && "VSELECT v32i8 only valid in AVX2");
     return LowerParabixOperation(Op, DAG);
   }
 

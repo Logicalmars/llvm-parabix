@@ -417,12 +417,16 @@ static SDValue PXLowerSETCC(SDValue Op, SelectionDAG &DAG) {
 }
 
 static SDValue PXLowerVSELECT(SDValue Op, SelectionDAG &DAG) {
+  // Only lowering this in AVX2
   MVT VT = Op.getSimpleValueType();
   SDLoc dl(Op);
 
   SDValue Mask = Op.getOperand(0);
   SDValue Op0 = Op.getOperand(1);
   SDValue Op1 = Op.getOperand(2);
+
+  if (Op0.getSimpleValueType() != MVT::v32i8)
+    return SDValue();
 
   if (Mask.getSimpleValueType() == MVT::v32i1) {
     SDValue MaskExt = DAG.getNode(ISD::SIGN_EXTEND, dl, MVT::v32i8, Mask);
