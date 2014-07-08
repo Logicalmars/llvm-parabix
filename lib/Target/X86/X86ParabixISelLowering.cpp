@@ -483,6 +483,8 @@ SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) 
 static SDValue PXPerformSExtCombine(SDNode *N, SelectionDAG &DAG,
                                     TargetLowering::DAGCombinerInfo &DCI,
                                     const X86Subtarget *Subtarget) {
+  // WARN: combine results must be legal ops. Just like lowerXXX that can't
+  // introduce illegal types, combine can't introduce illegal ops.
   return SDValue();
 }
 
