@@ -1577,7 +1577,6 @@ void X86TargetLowering::resetOperationActions() {
   if (Subtarget->hasAVX2()) {
     //TODO: make this statement more general
     setOperand0Action(ISD::VSELECT, MVT::v32i1, Custom);
-    //setOperand0Action(ISD::SIGN_EXTEND, MVT::v32i1, Custom);
   }
 
   // We have target-specific dag combine patterns for the following nodes:
@@ -14509,6 +14508,11 @@ SDValue X86TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
     //it's legal.
     return LowerParabixOperation(Op, DAG);
   }
+  if (Op.getOpcode() == ISD::SIGN_EXTEND &&
+      Op.getOperand(0).getSimpleValueType() == MVT::v32i1 &&
+      Subtarget->hasAVX2()) {
+    return LowerParabixOperation(Op, DAG);
+  }
 
   switch (Op.getOpcode()) {
   default: llvm_unreachable("Should not custom lower this!");
@@ -20650,6 +20654,14 @@ static SDValue performVZEXTCombine(SDNode *N, SelectionDAG &DAG,
 
 SDValue X86TargetLowering::PerformDAGCombine(SDNode *N,
                                              DAGCombinerInfo &DCI) const {
+  //Parabix
+  //Redirect to parabix DAG combine
+  if (N->getOpcode() == ISD::SIGN_EXTEND &&
+      N->getOperand(0).getSimpleValueType() == MVT::v32i1 &&
+      Subtarget->hasAVX2()) {
+    return PerformParabixDAGCombine(N, DCI);
+  }
+
   SelectionDAG &DAG = DCI.DAG;
   switch (N->getOpcode()) {
   default: break;

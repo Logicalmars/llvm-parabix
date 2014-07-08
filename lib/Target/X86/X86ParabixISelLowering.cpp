@@ -437,6 +437,13 @@ static SDValue PXLowerVSELECT(SDValue Op, SelectionDAG &DAG) {
   return SDValue();
 }
 
+static SDValue PXLowerSIGN_EXTEND(SDValue Op, SelectionDAG &DAG) {
+  // Only lowering this in AVX2
+  // INFO: Logic moved into DAGCombiner logic.
+  llvm_unreachable("only lowering parabix SIGN_EXTEND");
+  return SDValue();
+}
+
 ///Entrance for parabix lowering.
 SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) const {
   //NEED: setOperationAction in target specific lowering (X86ISelLowering.cpp)
@@ -469,5 +476,26 @@ SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) 
   case ISD::SCALAR_TO_VECTOR:   return PXLowerSCALAR_TO_VECTOR(Op, DAG);
   case ISD::SETCC:              return PXLowerSETCC(Op, DAG);
   case ISD::VSELECT:            return PXLowerVSELECT(Op, DAG);
+  case ISD::SIGN_EXTEND:        return PXLowerSIGN_EXTEND(Op, DAG);
   }
 }
+
+static SDValue PXPerformSExtCombine(SDNode *N, SelectionDAG &DAG,
+                                    TargetLowering::DAGCombinerInfo &DCI,
+                                    const X86Subtarget *Subtarget) {
+  return SDValue();
+}
+
+SDValue X86TargetLowering::PerformParabixDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const
+{
+  dbgs() << "Parabix DAG Combine: " << "\n"; N->dumpr();
+
+  SelectionDAG &DAG = DCI.DAG;
+  switch (N->getOpcode()) {
+  default: break;
+  case ISD::SIGN_EXTEND:        return PXPerformSExtCombine(N, DAG, DCI, Subtarget);
+  }
+
+  return SDValue();
+}
+
