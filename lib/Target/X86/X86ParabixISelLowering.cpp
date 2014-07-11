@@ -416,48 +416,6 @@ static SDValue PXLowerSETCC(SDValue Op, SelectionDAG &DAG) {
   return SDValue();
 }
 
-static SDValue PXLowerVSELECT(SDValue Op, SelectionDAG &DAG) {
-  // Only lowering this in AVX2
-  MVT VT = Op.getSimpleValueType();
-  SDLoc dl(Op);
-
-  SDValue Mask = Op.getOperand(0);
-  SDValue Op0 = Op.getOperand(1);
-  SDValue Op1 = Op.getOperand(2);
-
-  if (Op0.getSimpleValueType() != MVT::v32i8)
-    return SDValue();
-
-  if (Mask.getSimpleValueType() == MVT::v32i1) {
-    SDValue MaskExt = DAG.getNode(ISD::SIGN_EXTEND, dl, MVT::v32i8, Mask);
-    return DAG.getNode(ISD::VSELECT, dl, VT, MaskExt, Op0, Op1);
-  }
-
-  llvm_unreachable("only lowering parabix VSELECT");
-  return SDValue();
-}
-
-static SDValue PXLowerSIGN_EXTEND(SDValue Op, SelectionDAG &DAG) {
-  // Only lowering this in AVX2
-  MVT VT = Op.getSimpleValueType();
-  SDLoc dl(Op);
-  SDValue N0 = Op.getOperand(0);
-
-  SDNodeTreeBuilder b(Op, &DAG);
-
-  if (VT == MVT::v32i8 && N0.getSimpleValueType() == MVT::v32i1) {
-    SmallVector<SDValue, 32> Elements;
-    for (unsigned i = 0; i < 32; ++i) {
-      Elements.push_back(
-        b.SELECT(b.EXTRACT_VECTOR_ELT(N0, i), b.Constant(-1, MVT::i8),
-                                              b.Constant(0, MVT::i8)));
-    }
-    return b.BUILD_VECTOR(VT, Elements);
-  }
-  llvm_unreachable("only lowering parabix SIGN_EXTEND");
-  return SDValue();
-}
-
 ///Entrance for parabix lowering.
 SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) const {
   //NEED: setOperationAction in target specific lowering (X86ISelLowering.cpp)
@@ -489,16 +447,25 @@ SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) 
   case ISD::EXTRACT_VECTOR_ELT: return PXLowerEXTRACT_VECTOR_ELT(Op, DAG);
   case ISD::SCALAR_TO_VECTOR:   return PXLowerSCALAR_TO_VECTOR(Op, DAG);
   case ISD::SETCC:              return PXLowerSETCC(Op, DAG);
-  case ISD::VSELECT:            return PXLowerVSELECT(Op, DAG);
-  case ISD::SIGN_EXTEND:        return PXLowerSIGN_EXTEND(Op, DAG);
   }
 }
 
-static SDValue PXPerformSExtCombine(SDNode *N, SelectionDAG &DAG,
+static SDValue PXPerformVSELECTCombine(SDNode *N, SelectionDAG &DAG,
                                     TargetLowering::DAGCombinerInfo &DCI,
                                     const X86Subtarget *Subtarget) {
-  // WARN: combine results must be legal ops. Just like lowerXXX that can't
-  // introduce illegal types, combine can't introduce illegal ops.
+  MVT VT = N->getSimpleValueType(0);
+  SDValue Mask = N->getOperand(0);
+  MVT MaskTy = Mask.getSimpleValueType();
+  SDLoc dl(N);
+
+  //v32i8 (select v32i1, v32i8, v32i8) don't have proper lowering on AVX2, so
+  //we convert the mask to v32i8
+  if (MaskTy == MVT::v32i1 && VT == MVT::v32i8 && Subtarget->hasAVX2()) {
+    Mask = DAG.getNode(ISD::SIGN_EXTEND, dl, VT, Mask);
+    DCI.AddToWorklist(Mask.getNode());
+    return DAG.getNode(N->getOpcode(), dl, VT, Mask, N->getOperand(1), N->getOperand(2));
+  }
+
   return SDValue();
 }
 
@@ -507,7 +474,7 @@ SDValue X86TargetLowering::PerformParabixDAGCombine(SDNode *N, DAGCombinerInfo &
   SelectionDAG &DAG = DCI.DAG;
   switch (N->getOpcode()) {
   default: break;
-  case ISD::SIGN_EXTEND:        return PXPerformSExtCombine(N, DAG, DCI, Subtarget);
+  case ISD::VSELECT:            return PXPerformVSELECTCombine(N, DAG, DCI, Subtarget);
   }
 
   return SDValue();

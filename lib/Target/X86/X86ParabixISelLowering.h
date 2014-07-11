@@ -76,7 +76,6 @@ namespace llvm {
       MVT VT = TrueVal.getSimpleValueType();
       return DAG->getNode(ISD::SELECT, dl, VT, Cond, TrueVal, FalseVal);
     }
-
   };
 }
 

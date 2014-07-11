@@ -1574,11 +1574,6 @@ void X86TargetLowering::resetOperationActions() {
   setOperationAction(ISD::SETCC, MVT::v32i1, Custom);
   setOperationAction(ISD::LOAD, MVT::v32i1, Custom);
   setOperationAction(ISD::STORE, MVT::v32i1, Custom);
-  if (Subtarget->hasAVX2()) {
-    //TODO: make this statement more general
-    setOperand0Action(ISD::VSELECT, MVT::v32i1, Custom);
-    setOperand0Action(ISD::SIGN_EXTEND, MVT::v32i1, Custom);
-  }
 
   // We have target-specific dag combine patterns for the following nodes:
   setTargetDAGCombine(ISD::VECTOR_SHUFFLE);
