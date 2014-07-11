@@ -439,7 +439,21 @@ static SDValue PXLowerVSELECT(SDValue Op, SelectionDAG &DAG) {
 
 static SDValue PXLowerSIGN_EXTEND(SDValue Op, SelectionDAG &DAG) {
   // Only lowering this in AVX2
-  // INFO: Logic moved into DAGCombiner logic.
+  MVT VT = Op.getSimpleValueType();
+  SDLoc dl(Op);
+  SDValue N0 = Op.getOperand(0);
+
+  SDNodeTreeBuilder b(Op, &DAG);
+
+  if (VT == MVT::v32i8 && N0.getSimpleValueType() == MVT::v32i1) {
+    SmallVector<SDValue, 32> Elements;
+    for (unsigned i = 0; i < 32; ++i) {
+      Elements.push_back(
+        b.SELECT(b.EXTRACT_VECTOR_ELT(N0, i), b.Constant(-1, MVT::i8),
+                                              b.Constant(0, MVT::i8)));
+    }
+    return b.BUILD_VECTOR(VT, Elements);
+  }
   llvm_unreachable("only lowering parabix SIGN_EXTEND");
   return SDValue();
 }
@@ -447,7 +461,7 @@ static SDValue PXLowerSIGN_EXTEND(SDValue Op, SelectionDAG &DAG) {
 ///Entrance for parabix lowering.
 SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) const {
   //NEED: setOperationAction in target specific lowering (X86ISelLowering.cpp)
-  dbgs() << "Parabix Lowering:" << "\n"; Op.dumpr();
+  dbgs() << "Parabix Lowering:" << "\n"; Op.dump();
 
   //Only resetOperations for the first time.
   static bool FirstTimeThrough = true;
@@ -490,8 +504,6 @@ static SDValue PXPerformSExtCombine(SDNode *N, SelectionDAG &DAG,
 
 SDValue X86TargetLowering::PerformParabixDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const
 {
-  dbgs() << "Parabix DAG Combine: " << "\n"; N->dumpr();
-
   SelectionDAG &DAG = DCI.DAG;
   switch (N->getOpcode()) {
   default: break;
