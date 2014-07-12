@@ -460,7 +460,8 @@ static SDValue PXPerformVSELECTCombine(SDNode *N, SelectionDAG &DAG,
 
   //v32i8 (select v32i1, v32i8, v32i8) don't have proper lowering on AVX2, so
   //we convert the mask to v32i8
-  if (MaskTy == MVT::v32i1 && VT == MVT::v32i8 && Subtarget->hasAVX2()) {
+  if (MaskTy == MVT::v32i1 && VT == MVT::v32i8 &&
+      (Subtarget->hasAVX2() || Subtarget->hasAVX())) {
     Mask = DAG.getNode(ISD::SIGN_EXTEND, dl, VT, Mask);
     DCI.AddToWorklist(Mask.getNode());
     return DAG.getNode(N->getOpcode(), dl, VT, Mask, N->getOperand(1), N->getOperand(2));
