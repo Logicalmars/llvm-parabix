@@ -419,11 +419,12 @@ static SDValue PXLowerSETCC(SDValue Op, SelectionDAG &DAG) {
 ///Entrance for parabix lowering.
 SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) const {
   //NEED: setOperationAction in target specific lowering (X86ISelLowering.cpp)
-  dbgs() << "Parabix Lowering:" << "\n"; Op.dump();
+  //dbgs() << "Parabix Lowering:" << "\n"; Op.dump();
 
   //Only resetOperations for the first time.
   static bool FirstTimeThrough = true;
   if (FirstTimeThrough) {
+    dbgs() << "Parabix Lowering:" << "\n"; Op.dump();
     resetOperations();
     FirstTimeThrough = false;
   }
