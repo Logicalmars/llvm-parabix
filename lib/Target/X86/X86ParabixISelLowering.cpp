@@ -459,6 +459,23 @@ static SDValue PXPerformVSELECTCombine(SDNode *N, SelectionDAG &DAG,
   MVT MaskTy = Mask.getSimpleValueType();
   SDLoc dl(N);
 
+  SDNodeTreeBuilder b(&DAG, dl);
+
+  if (DCI.isBeforeLegalize()) {
+    //v128i1 (select v128i1, v128i1, v128i1) can be combined into logical ops
+    if (MaskTy == MVT::v128i1 && VT == MVT::v128i1) {
+      dbgs() << "Combining select v128i1 \n";
+
+      SDValue NewMask = DAG.getNode(ISD::BITCAST, dl, MVT::v4i32, Mask);
+      SDValue NewOp1  = DAG.getNode(ISD::BITCAST, dl, MVT::v4i32, N->getOperand(1));
+      SDValue NewOp2  = DAG.getNode(ISD::BITCAST, dl, MVT::v4i32, N->getOperand(2));
+
+      // (NewMask & NewOp1) || (~NewMask & NewOp2)
+      SDValue R = b.OR(b.AND(NewMask, NewOp1), b.AND(b.NOT(NewMask), NewOp2));
+      return DAG.getNode(ISD::BITCAST, dl, MVT::v128i1, R);
+    }
+  }
+
   //v32i8 (select v32i1, v32i8, v32i8) don't have proper lowering on AVX2, so
   //we convert the mask to v32i8
   if (MaskTy == MVT::v32i1 && VT == MVT::v32i8 &&

@@ -31,6 +31,13 @@ namespace llvm {
     SDNodeTreeBuilder(SDValue BaseOp, SelectionDAG *_DAG)
       : Op(BaseOp), DAG(_DAG), dl(BaseOp) {}
 
+    SDNodeTreeBuilder(SelectionDAG *_DAG, SDLoc _dl)
+      : DAG(_DAG), dl(_dl) {}
+
+    SDValue BITCAST(SDValue A, MVT VT) {
+      return DAG->getNode(ISD::BITCAST, dl, VT, A);
+    }
+
     SDValue Constant(int Num, MVT NumType = MVT::i32) {
       return DAG->getConstant(Num, NumType);
     }
@@ -75,6 +82,21 @@ namespace llvm {
     SDValue SELECT(SDValue Cond, SDValue TrueVal, SDValue FalseVal) {
       MVT VT = TrueVal.getSimpleValueType();
       return DAG->getNode(ISD::SELECT, dl, VT, Cond, TrueVal, FalseVal);
+    }
+
+    SDValue AND(SDValue A, SDValue B) {
+      MVT VT = A.getSimpleValueType();
+      return DAG->getNode(ISD::AND, dl, VT, A, B);
+    }
+
+    SDValue OR(SDValue A, SDValue B) {
+      MVT VT = A.getSimpleValueType();
+      return DAG->getNode(ISD::OR, dl, VT, A, B);
+    }
+
+    SDValue NOT(SDValue A) {
+      MVT VT = A.getSimpleValueType();
+      return DAG->getNOT(dl, A, VT);
     }
   };
 }
