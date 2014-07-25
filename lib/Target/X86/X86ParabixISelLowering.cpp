@@ -488,12 +488,27 @@ static SDValue PXPerformVSELECTCombine(SDNode *N, SelectionDAG &DAG,
   return SDValue();
 }
 
+static SDValue PXPerformVECTOR_SHUFFLECombine(SDNode *N, SelectionDAG &DAG,
+                                    TargetLowering::DAGCombinerInfo &DCI,
+                                    const X86Subtarget *Subtarget) {
+  MVT VT = N->getSimpleValueType(0);
+  SDLoc dl(N);
+  SDNodeTreeBuilder b(&DAG, dl);
+
+  if (DCI.isBeforeLegalize()) {
+    //v16i8 (vector_shuffle v16i8, v16i8, v16i32) can be combined into
+    //X86ISD::PACKUSWB
+    //TODO
+  }
+}
+
 SDValue X86TargetLowering::PerformParabixDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const
 {
   SelectionDAG &DAG = DCI.DAG;
   switch (N->getOpcode()) {
   default: break;
   case ISD::VSELECT:            return PXPerformVSELECTCombine(N, DAG, DCI, Subtarget);
+  case ISD::VECTOR_SHUFFLE:     return PXPerformVECTOR_SHUFFLECombine(N, DAG, DCI, Subtarget);
   }
 
   return SDValue();
