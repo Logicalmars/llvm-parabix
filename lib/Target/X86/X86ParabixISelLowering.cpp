@@ -488,22 +488,107 @@ static SDValue PXPerformVSELECTCombine(SDNode *N, SelectionDAG &DAG,
   return SDValue();
 }
 
+/// isUndefOrEqual - Val is either less than zero (undef) or equal to the
+/// specified value.
+static bool isUndefOrEqual(int Val, int CmpVal) {
+  return (Val < 0 || Val == CmpVal);
+}
+
+//Check whether the shuffle node is same as IDISA simd<16>::packl
+//Convert packed 16-bit integers from a and b to packed 8-bit integers
+//Collect all the low parts of 16bit-lane vectors a and b
+static bool isPackLowMask(ShuffleVectorSDNode *SVOp) {
+  EVT VT = SVOp->getValueType(0);
+  unsigned NumElems = VT.getVectorNumElements();
+  if (NumElems != 16)
+    return false;
+
+  //v16i8 (shufflevector v16i8, v16i8, <0, 2, 4, 6, 8, ..., 30>)
+  for (unsigned i = 0; i < 16; i++) {
+    if (!isUndefOrEqual(SVOp->getMaskElt(i), i * 2))
+      return false;
+  }
+
+  return true;
+}
+
+//Check whether the shuffle node is same as IDISA simd<16>::packh
+//Collect all the high parts of 16bit-lane vectors
+static bool isPackHighMask(ShuffleVectorSDNode *SVOp) {
+  EVT VT = SVOp->getValueType(0);
+  unsigned NumElems = VT.getVectorNumElements();
+  if (NumElems != 16)
+    return false;
+
+  //v16i8 (shufflevector v16i8, v16i8, <1, 3, 5, 7, ..., 31>)
+  for (unsigned i = 0; i < 16; i++) {
+    if (!isUndefOrEqual(SVOp->getMaskElt(i), i * 2 + 1))
+      return false;
+  }
+
+  return true;
+}
+
 static SDValue PXPerformVECTOR_SHUFFLECombine(SDNode *N, SelectionDAG &DAG,
                                     TargetLowering::DAGCombinerInfo &DCI,
                                     const X86Subtarget *Subtarget) {
   MVT VT = N->getSimpleValueType(0);
   SDLoc dl(N);
+  ShuffleVectorSDNode *SVOp = cast<ShuffleVectorSDNode>(N);
+  SDValue V1 = SVOp->getOperand(0);
+  SDValue V2 = SVOp->getOperand(1);
   SDNodeTreeBuilder b(&DAG, dl);
 
-  if (DCI.isBeforeLegalize()) {
-    //v16i8 (vector_shuffle v16i8, v16i8, v16i32) can be combined into
-    //X86ISD::PACKUSWB
-    //TODO
+  //v16i8 (vector_shuffle v16i8, v16i8, v16i32) can be combined into
+  //X86ISD::PACKUS
+  //simd<16>::packl
+  if (Subtarget->hasSSE2() && VT == MVT::v16i8 && isPackLowMask(SVOp)) {
+    dbgs() << "Parabix combine: \n";
+    N->dumpr();
+
+    //00000000111111110000000011111111
+    SDValue LowMaskInteger = b.Constant(16711935, MVT::i32);
+    SDValue VPool[] = {LowMaskInteger, LowMaskInteger, LowMaskInteger, LowMaskInteger};
+    SDValue LowMask16 = b.BITCAST(b.BUILD_VECTOR(MVT::v4i32, VPool), MVT::v8i16);
+
+    SDValue NewV1 = b.AND(LowMask16, b.BITCAST(V1, MVT::v8i16));
+    SDValue NewV2 = b.AND(LowMask16, b.BITCAST(V2, MVT::v8i16));
+
+    DCI.AddToWorklist(LowMask16.getNode());
+    DCI.AddToWorklist(NewV1.getNode());
+    DCI.AddToWorklist(NewV2.getNode());
+
+    return DAG.getNode(X86ISD::PACKUS, dl, MVT::v16i8, NewV1, NewV2);
   }
+
+  //X86ISD::PACKUS cont.
+  //For simd<16>::packh
+  if (Subtarget->hasSSE2() && VT == MVT::v16i8 && isPackHighMask(SVOp)) {
+    dbgs() << "Parabix combine: \n";
+    N->dumpr();
+
+    SDValue Cst = b.Constant(8, MVT::i16);
+    SDValue VPool[] = {Cst, Cst, Cst, Cst, Cst, Cst, Cst, Cst};
+    SDValue Shift = b.BUILD_VECTOR(MVT::v8i16, VPool);
+
+    SDValue NewV1 = b.SRL(b.BITCAST(V1, MVT::v8i16), Shift);
+    SDValue NewV2 = b.SRL(b.BITCAST(V2, MVT::v8i16), Shift);
+
+    DCI.AddToWorklist(Shift.getNode());
+    DCI.AddToWorklist(NewV1.getNode());
+    DCI.AddToWorklist(NewV2.getNode());
+
+    return DAG.getNode(X86ISD::PACKUS, dl, MVT::v16i8, NewV1, NewV2);
+  }
+
+  return SDValue();
 }
 
 SDValue X86TargetLowering::PerformParabixDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const
 {
+  //For now, only combine simple value type.
+  if (!N->getValueType(0).isSimple()) return SDValue();
+
   SelectionDAG &DAG = DCI.DAG;
   switch (N->getOpcode()) {
   default: break;

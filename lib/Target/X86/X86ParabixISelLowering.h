@@ -19,7 +19,7 @@
 #include "llvm/CodeGen/SelectionDAG.h"
 #include "llvm/Target/TargetLowering.h"
 #include "llvm/Target/TargetOptions.h"
-#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/ArrayRef.h"
 
 namespace llvm {
   class SDNodeTreeBuilder
@@ -46,7 +46,7 @@ namespace llvm {
       return DAG->getUNDEF(VT);
     }
 
-    SDValue BUILD_VECTOR(MVT VT, SmallVectorImpl<SDValue> &Elements) {
+    SDValue BUILD_VECTOR(MVT VT, ArrayRef<SDValue> Elements) {
       assert(VT.isVector() && "not building vector");
 
       unsigned NumElems = VT.getVectorNumElements();
@@ -97,6 +97,12 @@ namespace llvm {
     SDValue NOT(SDValue A) {
       MVT VT = A.getSimpleValueType();
       return DAG->getNOT(dl, A, VT);
+    }
+
+    SDValue SRL(SDValue A, SDValue Shift) {
+      assert(A.getSimpleValueType().SimpleTy == Shift.getSimpleValueType().SimpleTy &&
+             "SRL value type doesn't match");
+      return DAG->getNode(ISD::SRL, dl, A.getSimpleValueType(), A, Shift);
     }
   };
 }

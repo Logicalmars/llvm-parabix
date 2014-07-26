@@ -28,7 +28,7 @@ entry:
   ret <4 x i32> %r
 }
 
-define <4 x i32> @packh_16(<4 x i32> %a, <4 x i32> %b) alwaysinline {
+define <4 x i32> @packh_16(<4 x i32> %a, <4 x i32> %b) {
 entry:
   ;CHECK-LABEL: packh_16
   %aa = bitcast <4 x i32> %a to <16 x i8>
@@ -37,4 +37,19 @@ entry:
 
   %rr1 = bitcast <16 x i8> %rr to <4 x i32>
   ret <4 x i32> %rr1
+  ;CHECK: psrlw
+  ;CHECK: packuswb
+}
+
+define <4 x i32> @packl_16(<4 x i32> %a, <4 x i32> %b) {
+entry:
+  ;CHECK-LABEL: packl_16
+  %aa = bitcast <4 x i32> %a to <16 x i8>
+  %bb = bitcast <4 x i32> %b to <16 x i8>
+  %rr = shufflevector <16 x i8> %bb, <16 x i8> %aa, <16 x i32> <i32 0, i32 2, i32 4, i32 6, i32 8, i32 10, i32 12, i32 14, i32 16, i32 18, i32 20, i32 22, i32 24, i32 26, i32 28, i32 30>
+
+  %rr1 = bitcast <16 x i8> %rr to <4 x i32>
+  ret <4 x i32> %rr1
+  ;CHECK pand
+  ;CHECK packuswb
 }
