@@ -1575,6 +1575,26 @@ void X86TargetLowering::resetOperationActions() {
   setOperationAction(ISD::LOAD, MVT::v32i1, Custom);
   setOperationAction(ISD::STORE, MVT::v32i1, Custom);
 
+  if (Subtarget->is64Bit()) {
+    setOperationAction(ISD::ADD, MVT::v64i1, Custom);
+    setOperationAction(ISD::SUB, MVT::v64i1, Custom);
+    setOperationAction(ISD::MUL, MVT::v64i1, Custom);
+    setOperationAction(ISD::AND, MVT::v64i1, Custom);
+    setOperationAction(ISD::OR, MVT::v64i1, Custom);
+    setOperationAction(ISD::XOR, MVT::v64i1, Custom);
+    setOperationAction(ISD::MULHU, MVT::v64i1, Custom);
+    setOperationAction(ISD::SHL, MVT::v64i1, Custom);
+    setOperationAction(ISD::SRL, MVT::v64i1, Custom);
+    setOperationAction(ISD::SRA, MVT::v64i1, Custom);
+    setOperationAction(ISD::BUILD_VECTOR, MVT::v64i1, Custom);
+    setOperationAction(ISD::EXTRACT_VECTOR_ELT, MVT::v64i1, Custom);
+    setOperationAction(ISD::INSERT_VECTOR_ELT, MVT::v64i1, Custom);
+    setOperationAction(ISD::SCALAR_TO_VECTOR, MVT::v64i1, Custom);
+    setOperationAction(ISD::SETCC, MVT::v64i1, Custom);
+    setOperationAction(ISD::LOAD, MVT::v64i1, Custom);
+    setOperationAction(ISD::STORE, MVT::v64i1, Custom);
+  }
+
   // We have target-specific dag combine patterns for the following nodes:
   setTargetDAGCombine(ISD::VECTOR_SHUFFLE);
   setTargetDAGCombine(ISD::EXTRACT_VECTOR_ELT);

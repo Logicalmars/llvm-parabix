@@ -56,45 +56,51 @@ using namespace llvm;
 
 #define DEBUG_TYPE "x86-isel"
 
+//v32i1 => i32, v32i2 => i64, etc
+static MVT getFullRegisterType(MVT VT) {
+  MVT castType;
+  if (VT.is32BitVector())
+    castType = MVT::i32;
+  else if (VT.is64BitVector())
+    castType = MVT::i64;
+  else
+    llvm_unreachable("unsupported parabix vector width");
+
+  return castType;
+}
+
 //Parabix LowerSTORE
 static SDValue PXLowerSTORE(SDValue Op, SelectionDAG &DAG) {
-  //TODO: expand this strategy to all 32bit/64bit vectors
   MVT ValVT = Op.getOperand(1).getSimpleValueType();
-  if (ValVT == MVT::v32i1)
-  {
-    SDNode *Node = Op.getNode();
-    SDLoc dl(Node);
-    StoreSDNode *ST = cast<StoreSDNode>(Node);
-    SDValue Tmp1 = ST->getChain();
-    SDValue Tmp2 = ST->getBasePtr();
-    SDValue Tmp3 = ST->getValue();
+  MVT CastType = getFullRegisterType(ValVT);
 
-    SDValue TransTmp3 = DAG.getNode(ISD::BITCAST, dl, MVT::i32, Tmp3);
-    return DAG.getStore(Tmp1, dl, TransTmp3, Tmp2, ST->getMemOperand());
-  }
-  llvm_unreachable("lowering store for unsupported type");
-  return SDValue();
+  SDNode *Node = Op.getNode();
+  SDLoc dl(Node);
+  StoreSDNode *ST = cast<StoreSDNode>(Node);
+  SDValue Tmp1 = ST->getChain();
+  SDValue Tmp2 = ST->getBasePtr();
+  SDValue Tmp3 = ST->getValue();
+
+  SDValue TransTmp3 = DAG.getNode(ISD::BITCAST, dl, CastType, Tmp3);
+  return DAG.getStore(Tmp1, dl, TransTmp3, Tmp2, ST->getMemOperand());
 }
 
 static SDValue PXLowerLOAD(SDValue Op, SelectionDAG &DAG) {
-  //TODO: This strategy works for all 32bit vector and 64bit vectors.
-  if (Op.getSimpleValueType() == MVT::v32i1)
-  {
-    SDLoc dl(Op);
-    LoadSDNode *LD = cast<LoadSDNode>(Op);
+  MVT VT = Op.getSimpleValueType();
+  MVT CastType = getFullRegisterType(VT);
 
-    SDValue Chain = LD->getChain();
-    SDValue BasePtr = LD->getBasePtr();
-    MachineMemOperand *MMO = LD->getMemOperand();
+  SDLoc dl(Op);
+  LoadSDNode *LD = cast<LoadSDNode>(Op);
 
-    SDValue NewLD = DAG.getLoad(MVT::i32, dl, Chain, BasePtr, MMO);
-    SDValue Result = DAG.getNode(ISD::BITCAST, dl, MVT::v32i1, NewLD);
-    SDValue Ops[] = { Result, SDValue(NewLD.getNode(), 1) };
+  SDValue Chain = LD->getChain();
+  SDValue BasePtr = LD->getBasePtr();
+  MachineMemOperand *MMO = LD->getMemOperand();
 
-    return DAG.getMergeValues(Ops, dl);
-  }
-  llvm_unreachable("lowering store for unsupported type");
-  return SDValue();
+  SDValue NewLD = DAG.getLoad(CastType, dl, Chain, BasePtr, MMO);
+  SDValue Result = DAG.getNode(ISD::BITCAST, dl, VT, NewLD);
+  SDValue Ops[] = { Result, SDValue(NewLD.getNode(), 1) };
+
+  return DAG.getMergeValues(Ops, dl);
 }
 
 typedef std::pair<ISD::NodeType, MVT> CastAndOpKind;
@@ -119,28 +125,14 @@ static void resetOperations()
   addCastAndOpKind(ISD::OR,  MVT::v32i1, ISD::OR);
   addCastAndOpKind(ISD::MULHU,  MVT::v32i1, ISD::AND);
 
-  //addCastAndOpKind(ISD::VECTOR_SHUFFLE, MVT::v32i1, Expand);
-  //addCastAndOpKind(ISD::EXTRACT_VECTOR_ELT, MVT::v32i1,Expand);
-  //addCastAndOpKind(ISD::INSERT_VECTOR_ELT, MVT::v32i1, Expand);
-  //addCastAndOpKind(ISD::EXTRACT_SUBVECTOR, MVT::v32i1,Expand);
-  //addCastAndOpKind(ISD::INSERT_SUBVECTOR, MVT::v32i1, EXpand);
-  //SMUL_LOHI
-  //MULHS, UMUL_LOHI, MULHU
-  //SHL, SRA, SRL, ROTL, ROTR,
-  //VSELECT
-}
+  addCastAndOpKind(ISD::ADD, MVT::v64i1, ISD::XOR);
+  addCastAndOpKind(ISD::SUB, MVT::v64i1, ISD::XOR);
+  addCastAndOpKind(ISD::MUL, MVT::v64i1, ISD::AND);
+  addCastAndOpKind(ISD::AND, MVT::v64i1, ISD::AND);
+  addCastAndOpKind(ISD::XOR, MVT::v64i1, ISD::XOR);
+  addCastAndOpKind(ISD::OR,  MVT::v64i1, ISD::OR);
+  addCastAndOpKind(ISD::MULHU,  MVT::v64i1, ISD::AND);
 
-//v32i1 => i32, v32i2 => i64, etc
-static MVT getFullRegisterType(MVT VT) {
-  MVT castType;
-  if (VT.is32BitVector())
-    castType = MVT::i32;
-  else if (VT.is64BitVector())
-    castType = MVT::i64;
-  else
-    llvm_unreachable("unsupported parabix vector width");
-
-  return castType;
 }
 
 static SDValue getFullRegister(SDValue Op, SelectionDAG &DAG) {
@@ -199,15 +191,15 @@ static SDValue PXLowerShift(SDValue Op, SelectionDAG &DAG) {
   SDValue A = Op.getOperand(0);
   SDValue B = Op.getOperand(1);
   SDValue res;
+  SDNodeTreeBuilder b(Op, &DAG);
 
-  if (VT == MVT::v32i1 && Op.getOpcode() != ISD::SRA) {
+  MVT VectorEleType = VT.getVectorElementType();
+
+  if (VectorEleType == MVT::i1 && Op.getOpcode() != ISD::SRA) {
     //SRL or SHL
-    SDValue transA = DAG.getNode(ISD::BITCAST, dl, MVT::i32, A);
-    SDValue transB = DAG.getNode(ISD::BITCAST, dl, MVT::i32, B);
-    SDValue negB = DAG.getNOT(dl, transB, MVT::i32);
-    res = DAG.getNode(ISD::AND, dl, MVT::i32, transA, negB);
+    res = b.AND(getFullRegister(A, DAG), b.NOT(getFullRegister(B, DAG)));
   }
-  else if (VT == MVT::v32i1 && Op.getOpcode() == ISD::SRA) {
+  else if (VectorEleType == MVT::i1 && Op.getOpcode() == ISD::SRA) {
     return A;
   }
   else
@@ -223,27 +215,29 @@ static SDValue PXLowerADD(SDValue Op, SelectionDAG &DAG) {
 
 static SDValue PXLowerINSERT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) {
   MVT VT = Op.getSimpleValueType();
+  MVT FullVT = getFullRegisterType(VT);
 
   SDLoc dl(Op);
   SDValue N0 = Op.getOperand(0); // vector <val>
   SDValue N1 = Op.getOperand(1); // elt
   SDValue N2 = Op.getOperand(2); // idx
 
-  if (VT == MVT::v32i1) {
-    //Cast v32i1 into i32 and do bit manipulation.
-    SDValue TransN0 = DAG.getNode(ISD::BITCAST, dl, MVT::i32, N0);
+  if (VT.getVectorElementType() == MVT::i1) {
+    //VT is v32i1 or v64i1
+    //Cast VT into full register and do bit manipulation.
+    SDValue TransN0 = getFullRegister(N0, DAG);
     SDValue Res;
 
     if (isa<ConstantSDNode>(N1)) {
       if (cast<ConstantSDNode>(N1)->isNullValue()) {
         //insert zero
-        SDValue Mask = DAG.getNode(ISD::SHL, dl, MVT::i32, DAG.getConstant(1, MVT::i32), N2);
-        SDValue NegMask = DAG.getNOT(dl, Mask, MVT::i32);
-        Res = DAG.getNode(ISD::AND, dl, MVT::i32, NegMask, TransN0);
+        SDValue Mask = DAG.getNode(ISD::SHL, dl, FullVT, DAG.getConstant(1, FullVT), N2);
+        SDValue NegMask = DAG.getNOT(dl, Mask, FullVT);
+        Res = DAG.getNode(ISD::AND, dl, FullVT, NegMask, TransN0);
       } else {
         //insert one
-        SDValue Mask = DAG.getNode(ISD::SHL, dl, MVT::i32, DAG.getConstant(1, MVT::i32), N2);
-        Res = DAG.getNode(ISD::OR, dl, MVT::i32, Mask, TransN0);
+        SDValue Mask = DAG.getNode(ISD::SHL, dl, FullVT, DAG.getConstant(1, FullVT), N2);
+        Res = DAG.getNode(ISD::OR, dl, FullVT, Mask, TransN0);
       }
     } else {
       // Elt is not a constant node
@@ -252,10 +246,10 @@ static SDValue PXLowerINSERT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) {
       // NOT is sensitive of bit width
       SDValue NotV = DAG.getNode(ISD::AND, dl, MVT::i8, DAG.getConstant(1, MVT::i8),
                                  DAG.getNOT(dl, N1, MVT::i8));
-      SDValue Zext = DAG.getNode(ISD::ZERO_EXTEND, dl, MVT::i32, NotV);
-      SDValue Mask = DAG.getNOT(dl, DAG.getNode(ISD::SHL, dl, MVT::i32, Zext, N2),
-                                MVT::i32);
-      Res = DAG.getNode(ISD::AND, dl, MVT::i32, Mask, TransN0);
+      SDValue Zext = DAG.getNode(ISD::ZERO_EXTEND, dl, FullVT, NotV);
+      SDValue Mask = DAG.getNOT(dl, DAG.getNode(ISD::SHL, dl, FullVT, Zext, N2),
+                                FullVT);
+      Res = DAG.getNode(ISD::AND, dl, FullVT, Mask, TransN0);
     }
 
     // Cast back
@@ -270,14 +264,16 @@ static SDValue PXLowerEXTRACT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) {
   SDLoc dl(Op);
   SDValue Vec = Op.getOperand(0);
   MVT VecVT = Vec.getSimpleValueType();
+  MVT FullVT = getFullRegisterType(VecVT);
   SDValue Idx = Op.getOperand(1);
 
-  if (VecVT == MVT::v32i1) {
+  if (VecVT.getVectorElementType() == MVT::i1) {
+    //VecVT is v32i1 or v64i1
     //TRUNC(AND(1, SRL(FULL_REG(VecVT), Idx)), i8)
-    SDValue TransV = DAG.getNode(ISD::BITCAST, dl, MVT::i32, Vec);
-    SDValue ShiftV = DAG.getNode(ISD::SRL, dl, MVT::i32, TransV, Idx);
+    SDValue TransV = DAG.getNode(ISD::BITCAST, dl, FullVT, Vec);
+    SDValue ShiftV = DAG.getNode(ISD::SRL, dl, FullVT, TransV, Idx);
     return DAG.getNode(ISD::TRUNCATE, dl, MVT::i8,
-                       DAG.getNode(ISD::AND, dl, MVT::i32, ShiftV, DAG.getConstant(1, MVT::i32)));
+                       DAG.getNode(ISD::AND, dl, FullVT, ShiftV, DAG.getConstant(1, FullVT)));
   }
 
   llvm_unreachable("lowering extract_vector_elt for unsupported type");
@@ -287,16 +283,17 @@ static SDValue PXLowerEXTRACT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) {
 static SDValue PXLowerSCALAR_TO_VECTOR(SDValue Op, SelectionDAG &DAG) {
   SDLoc dl(Op);
   MVT VecVT = Op.getSimpleValueType();
+  MVT FullVT = getFullRegisterType(VecVT);
   SDValue Val = Op.getOperand(0);
   EVT EltVT = VecVT.getVectorElementType();
 
   assert(EltVT.isInteger() && Val.getValueType().bitsGE(EltVT) &&
          "incorrect scalar_to_vector parameters");
-  if (VecVT == MVT::v32i1) {
+  if (VecVT == MVT::v32i1 || VecVT == MVT::v64i1) {
     SDValue Trunc = DAG.getNode(ISD::AND, dl, MVT::i8, DAG.getConstant(1, MVT::i8),
                                 DAG.getNode(ISD::TRUNCATE, dl, MVT::i8, Val));
-    SDValue Ext = DAG.getNode(ISD::ANY_EXTEND, dl, MVT::i32, Trunc);
-    return DAG.getNode(ISD::BITCAST, dl, MVT::v32i1, Ext);
+    SDValue Ext = DAG.getNode(ISD::ANY_EXTEND, dl, FullVT, Trunc);
+    return DAG.getNode(ISD::BITCAST, dl, VecVT, Ext);
   }
 
   llvm_unreachable("lowering unsupported scalar_to_vector");
@@ -311,6 +308,8 @@ static SDValue getPXZeroVector(EVT VT, const X86Subtarget *Subtarget,
   if (VT.isSimple() && VT.getSimpleVT().is32BitVector()) {
     // Careful here, don't use TargetConstant until you are sure.
     Vec = DAG.getConstant(0, MVT::i32);
+  } else if (VT.isSimple() && VT.getSimpleVT().is64BitVector()) {
+    Vec = DAG.getConstant(0, MVT::i64);
   } else
     llvm_unreachable("Unexpected vector type");
 
@@ -325,6 +324,8 @@ static SDValue getPXOnesVector(EVT VT, const X86Subtarget *Subtarget,
   if (VT.isSimple() && VT.getSimpleVT().is32BitVector()) {
     // Careful here, don't use TargetConstant until you are sure.
     Vec = DAG.getConstant(-1, MVT::i32);
+  } else if (VT.isSimple() && VT.getSimpleVT().is64BitVector()) {
+    Vec = DAG.getConstant(-1, MVT::i64);
   } else
     llvm_unreachable("Unexpected vector type");
 
@@ -336,7 +337,6 @@ X86TargetLowering::PXLowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const {
   SDLoc dl(Op);
 
   MVT VT = Op.getSimpleValueType();
-  //MVT ExtVT = VT.getVectorElementType();
   unsigned NumElems = Op.getNumOperands();
 
   // Vectors containing all zeros can be matched by pxor and xorps later
@@ -354,15 +354,16 @@ X86TargetLowering::PXLowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const {
   }
 
 
-  if (VT == MVT::v32i1) {
+  if (VT == MVT::v32i1 || VT == MVT::v64i1) {
     //Brutely insert element
-    SDValue Base = DAG.getNode(ISD::BITCAST, dl, MVT::v32i1,
-                               DAG.getConstant(0, MVT::i32));
+    MVT FullVT = getFullRegisterType(VT);
+    SDValue Base = DAG.getNode(ISD::BITCAST, dl, VT,
+                               DAG.getConstant(0, FullVT));
     for (unsigned i = 0; i < NumElems; ++i) {
       SDValue Elt = Op.getOperand(i);
       if (Elt.getOpcode() == ISD::UNDEF)
         continue;
-      Base = DAG.getNode(ISD::INSERT_VECTOR_ELT, dl, MVT::v32i1, Base, Elt,
+      Base = DAG.getNode(ISD::INSERT_VECTOR_ELT, dl, VT, Base, Elt,
                          DAG.getConstant(i, MVT::i32));
     }
 
@@ -375,13 +376,14 @@ X86TargetLowering::PXLowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const {
 
 static SDValue PXLowerSETCC(SDValue Op, SelectionDAG &DAG) {
   MVT VT = Op.getSimpleValueType();
+  MVT FullVT = getFullRegisterType(VT);
   SDLoc dl(Op);
   SDValue Op0 = Op.getOperand(0);
   SDValue Op1 = Op.getOperand(1);
   ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(2))->get();
   SDValue NEVec, TransA, TransB, Res, NotOp1, NotOp0;
 
-  if (VT == MVT::v32i1) {
+  if (VT == MVT::v32i1 || VT == MVT::v64i1) {
     switch (CC) {
     default: llvm_unreachable("Can't lower this parabix SETCC");
     case ISD::SETNE:    return lowerWithCastAndOp(Op, DAG, ISD::XOR);
@@ -391,16 +393,16 @@ static SDValue PXLowerSETCC(SDValue Op, SelectionDAG &DAG) {
     case ISD::SETLT:
     case ISD::SETUGT:
       NotOp1 = DAG.getNOT(dl, Op1, VT);
-      TransA = DAG.getNode(ISD::BITCAST, dl, MVT::i32, Op0);
-      TransB = DAG.getNode(ISD::BITCAST, dl, MVT::i32, NotOp1);
-      Res = DAG.getNode(ISD::AND, dl, MVT::i32, TransA, TransB);
-      return DAG.getNode(ISD::BITCAST, dl, MVT::v32i1, Res);
+      TransA = DAG.getNode(ISD::BITCAST, dl, FullVT, Op0);
+      TransB = DAG.getNode(ISD::BITCAST, dl, FullVT, NotOp1);
+      Res = DAG.getNode(ISD::AND, dl, FullVT, TransA, TransB);
+      return DAG.getNode(ISD::BITCAST, dl, VT, Res);
     case ISD::SETGT:
     case ISD::SETULT:
-      NotOp0 = DAG.getNOT(dl, getFullRegister(Op0, DAG), MVT::i32);
-      Res = DAG.getNode(ISD::AND, dl, MVT::i32, NotOp0,
+      NotOp0 = DAG.getNOT(dl, getFullRegister(Op0, DAG), FullVT);
+      Res = DAG.getNode(ISD::AND, dl, FullVT, NotOp0,
                                 getFullRegister(Op1, DAG));
-      return DAG.getNode(ISD::BITCAST, dl, MVT::v32i1, Res);
+      return DAG.getNode(ISD::BITCAST, dl, VT, Res);
     case ISD::SETLE:
     case ISD::SETUGE:
       Res = DAG.getNode(ISD::SETCC, dl, VT, Op0, Op1, DAG.getCondCode(ISD::SETGT));
@@ -419,12 +421,12 @@ static SDValue PXLowerSETCC(SDValue Op, SelectionDAG &DAG) {
 ///Entrance for parabix lowering.
 SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) const {
   //NEED: setOperationAction in target specific lowering (X86ISelLowering.cpp)
-  //dbgs() << "Parabix Lowering:" << "\n"; Op.dump();
+  dbgs() << "Parabix Lowering:" << "\n"; Op.dump();
 
   //Only resetOperations for the first time.
   static bool FirstTimeThrough = true;
   if (FirstTimeThrough) {
-    dbgs() << "Parabix Lowering:" << "\n"; Op.dump();
+    //dbgs() << "Parabix Lowering:" << "\n"; Op.dump();
     resetOperations();
     FirstTimeThrough = false;
   }

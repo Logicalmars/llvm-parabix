@@ -39,6 +39,7 @@ def RetCC_X86Common : CallingConv<[
 
   //Parabix
   CCIfType<[v32i1], CCAssignToReg<[EAX, EDX, ECX]>>,
+  CCIfType<[v64i1], CCAssignToReg<[RAX, RDX, RCX]>>,
 
   // Vector types are returned in XMM0 and XMM1, when they fit.  XMM2 and XMM3
   // can only be used by ABI non-compliant code. If the target doesn't have XMM
@@ -238,6 +239,7 @@ def CC_X86_64_C : CallingConv<[
 
   // Parabix
   CCIfType<[v32i1], CCAssignToReg<[EDI, ESI, EDX, ECX, R8D, R9D]>>,
+  CCIfType<[v64i1], CCAssignToReg<[RDI, RSI, RDX, RCX, R8 , R9 ]>>,
 
   // The first 8 MMX vector arguments are passed in XMM registers on Darwin.
   CCIfType<[x86mmx],
@@ -267,7 +269,7 @@ def CC_X86_64_C : CallingConv<[
 
   // Integer/FP values get stored in stack slots that are 8 bytes in size and
   // 8-byte aligned if there are no more registers to hold them.
-  CCIfType<[i32, i64, f32, f64], CCAssignToStack<8, 8>>,
+  CCIfType<[i32, i64, v32i1, v64i1, f32, f64], CCAssignToStack<8, 8>>,
 
   // Long doubles get stack slots whose size and alignment depends on the
   // subtarget.
@@ -344,6 +346,9 @@ def CC_X86_64_GHC : CallingConv<[
   CCIfType<[i64],
             CCAssignToReg<[R13, RBP, R12, RBX, R14, RSI, RDI, R8, R9, R15]>>,
 
+  CCIfType<[v64i1],
+            CCAssignToReg<[R13, RBP, R12, RBX, R14, RSI, RDI, R8, R9, R15]>>,
+
   // Pass in STG registers: F1, F2, F3, F4, D1, D2
   CCIfType<[f32, f64, v16i8, v8i16, v4i32, v2i64, v4f32, v2f64],
             CCIfSubtarget<"hasSSE1()",
@@ -356,6 +361,7 @@ def CC_X86_64_HiPE : CallingConv<[
 
   // Pass in VM's registers: HP, P, ARG0, ARG1, ARG2, ARG3
   CCIfType<[i64], CCAssignToReg<[R15, RBP, RSI, RDX, RCX, R8]>>,
+  CCIfType<[v64i1], CCAssignToReg<[R15, RBP, RSI, RDX, RCX, R8]>>,
 
   // Integer/FP values get stored in stack slots that are 8 bytes in size and
   // 8-byte aligned if there are no more registers to hold them.

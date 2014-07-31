@@ -345,7 +345,7 @@ def GR64 : RegisterClass<"X86", [i64], 64,
                               RBX, R14, R15, R12, R13, RBP, RSP, RIP)>;
 
 // GR64 Extended, used for parabix
-def GR64X : RegisterClass<"X86", [v64i1], 64,
+def GR64X : RegisterClass<"X86", [v64i1, i64], 64,
                          (add RAX, RCX, RDX, RSI, RDI, R8, R9, R10, R11,
                               RBX, R14, R15, R12, R13, RBP, RSP, RIP)>;
 

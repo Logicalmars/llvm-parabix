@@ -2219,8 +2219,9 @@ let Predicates = [HasBMI2] in {
               (INSERT_SUBREG (i64 (IMPLICIT_DEF)), GR8:$lz, sub_8bit))>;
 } // HasBMI2
 
-//Parabix: bit convert v32i1 to i32
+//Parabix: bit convert v32i1 to i32, v64i1 to i64
 def : Pat <(i32 (bitconvert (v32i1 GR32X:$src))), (i32 GR32X:$src)>;
+def : Pat <(i64 (bitconvert (v64i1 GR64X:$src))), (i64 GR64X:$src)>;
 
 let Predicates = [HasBMI] in {
   def : Pat<(X86bextr GR32:$src1, GR32:$src2),
