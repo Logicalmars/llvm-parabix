@@ -20,6 +20,7 @@
 #include "llvm/Target/TargetLowering.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/IR/Intrinsics.h"
 
 namespace llvm {
   class SDNodeTreeBuilder
@@ -103,6 +104,24 @@ namespace llvm {
       assert(A.getSimpleValueType().SimpleTy == Shift.getSimpleValueType().SimpleTy &&
              "SRL value type doesn't match");
       return DAG->getNode(ISD::SRL, dl, A.getSimpleValueType(), A, Shift);
+    }
+
+    SDValue SHL(SDValue A, SDValue Shift) {
+      assert(A.getSimpleValueType().SimpleTy == Shift.getSimpleValueType().SimpleTy &&
+             "SHL value type doesn't match");
+      return DAG->getNode(ISD::SHL, dl, A.getSimpleValueType(), A, Shift);
+    }
+
+    SDValue PEXT64(SDValue A, SDValue B) {
+      assert(A.getSimpleValueType() == MVT::i64 &&
+             B.getSimpleValueType() == MVT::i64 &&
+             "PEXT64 only take i64 operands");
+
+      SDValue V = DAG->getNode(ISD::INTRINSIC_WO_CHAIN, dl,
+                              MVT::i64,
+                              DAG->getConstant(Intrinsic::x86_bmi_pext_64, MVT::i32),
+                              A,B);
+      return V;
     }
   };
 }

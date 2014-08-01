@@ -52,6 +52,7 @@
 #include <bitset>
 #include <cctype>
 #include <map>
+#include <string>
 using namespace llvm;
 
 #define DEBUG_TYPE "x86-isel"
@@ -498,15 +499,13 @@ static bool isUndefOrEqual(int Val, int CmpVal) {
 
 //Check whether the shuffle node is same as IDISA simd<16>::packl
 //Convert packed 16-bit integers from a and b to packed 8-bit integers
-//Collect all the low parts of 16bit-lane vectors a and b
+//Collect all the low parts of vectors a and b
 static bool isPackLowMask(ShuffleVectorSDNode *SVOp) {
   EVT VT = SVOp->getValueType(0);
   unsigned NumElems = VT.getVectorNumElements();
-  if (NumElems != 16)
-    return false;
 
   //v16i8 (shufflevector v16i8, v16i8, <0, 2, 4, 6, 8, ..., 30>)
-  for (unsigned i = 0; i < 16; i++) {
+  for (unsigned i = 0; i < NumElems; i++) {
     if (!isUndefOrEqual(SVOp->getMaskElt(i), i * 2))
       return false;
   }
@@ -515,15 +514,13 @@ static bool isPackLowMask(ShuffleVectorSDNode *SVOp) {
 }
 
 //Check whether the shuffle node is same as IDISA simd<16>::packh
-//Collect all the high parts of 16bit-lane vectors
+//Collect all the high parts of vectors
 static bool isPackHighMask(ShuffleVectorSDNode *SVOp) {
   EVT VT = SVOp->getValueType(0);
   unsigned NumElems = VT.getVectorNumElements();
-  if (NumElems != 16)
-    return false;
 
   //v16i8 (shufflevector v16i8, v16i8, <1, 3, 5, 7, ..., 31>)
-  for (unsigned i = 0; i < 16; i++) {
+  for (unsigned i = 0; i < NumElems; i++) {
     if (!isUndefOrEqual(SVOp->getMaskElt(i), i * 2 + 1))
       return false;
   }
@@ -581,6 +578,71 @@ static SDValue PXPerformVECTOR_SHUFFLECombine(SDNode *N, SelectionDAG &DAG,
     DCI.AddToWorklist(NewV2.getNode());
 
     return DAG.getNode(X86ISD::PACKUS, dl, MVT::v16i8, NewV1, NewV2);
+  }
+
+  //PEXT for simd<2, 4, 8>::packl or packh
+  //the Mask is the only thing different
+  if (Subtarget->hasBMI2() && Subtarget->is64Bit() &&
+      (isPackLowMask(SVOp) || isPackHighMask(SVOp)) &&
+      (VT == MVT::v32i4 || VT == MVT::v64i2 || VT == MVT::v128i1)) {
+    dbgs() << "Parabix combine: \n";
+    N->dumpr();
+
+    std::string Mask;
+    if (isPackLowMask(SVOp)) {
+      switch (VT.SimpleTy) {
+      default: llvm_unreachable("unsupported type");
+      case MVT::v32i4:
+        //simd<8>::packl
+        Mask = "0000111100001111000011110000111100001111000011110000111100001111";
+        break;
+      case MVT::v64i2:
+        //simd<4>::packl
+        Mask = "0011001100110011001100110011001100110011001100110011001100110011";
+        break;
+      case MVT::v128i1:
+        //simd<2>::packl
+        Mask = "0101010101010101010101010101010101010101010101010101010101010101";
+        break;
+      }
+    } else if (isPackHighMask(SVOp)) {
+      switch (VT.SimpleTy) {
+      default: llvm_unreachable("unsupported type");
+      case MVT::v32i4:
+        //simd<8>::packl
+        Mask = "1111000011110000111100001111000011110000111100001111000011110000";
+        break;
+      case MVT::v64i2:
+        //simd<4>::packl
+        Mask = "1100110011001100110011001100110011001100110011001100110011001100";
+        break;
+      case MVT::v128i1:
+        //simd<2>::packl
+        Mask = "1010101010101010101010101010101010101010101010101010101010101010";
+        break;
+      }
+    }
+
+    APInt MaskInt(64, Mask, 2);
+    dbgs() << "Mask is "; MaskInt.dump(); dbgs() << "\n";
+    dbgs() << "Mask in radix 2: \n" << MaskInt.toString(2, false) << "\n";
+    SDValue MaskNode = DAG.getConstant(MaskInt, MVT::i64);
+
+    SDValue A = b.BITCAST(V1, MVT::v2i64);
+    SDValue A0 = b.EXTRACT_VECTOR_ELT(A, b.Constant(0));
+    SDValue A1 = b.EXTRACT_VECTOR_ELT(A, b.Constant(1));
+
+    SDValue B = b.BITCAST(V2, MVT::v2i64);
+    SDValue B0 = b.EXTRACT_VECTOR_ELT(B, b.Constant(0));
+    SDValue B1 = b.EXTRACT_VECTOR_ELT(B, b.Constant(1));
+
+    SDValue P0 = b.OR(b.PEXT64(A0, MaskNode),
+                      b.SHL(b.PEXT64(A1, MaskNode), b.Constant(32, MVT::i64)));
+    SDValue P1 = b.OR(b.PEXT64(B0, MaskNode),
+                      b.SHL(b.PEXT64(B1, MaskNode), b.Constant(32, MVT::i64)));
+
+    SDValue P[] = {P0, P1};
+    return b.BITCAST(b.BUILD_VECTOR(MVT::v2i64, P), VT);
   }
 
   return SDValue();
