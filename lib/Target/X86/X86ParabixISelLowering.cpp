@@ -624,8 +624,6 @@ static SDValue PXPerformVECTOR_SHUFFLECombine(SDNode *N, SelectionDAG &DAG,
     }
 
     APInt MaskInt(64, Mask, 2);
-    dbgs() << "Mask is "; MaskInt.dump(); dbgs() << "\n";
-    dbgs() << "Mask in radix 2: \n" << MaskInt.toString(2, false) << "\n";
     SDValue MaskNode = DAG.getConstant(MaskInt, MVT::i64);
 
     SDValue A = b.BITCAST(V1, MVT::v2i64);
@@ -636,13 +634,13 @@ static SDValue PXPerformVECTOR_SHUFFLECombine(SDNode *N, SelectionDAG &DAG,
     SDValue B0 = b.EXTRACT_VECTOR_ELT(B, b.Constant(0));
     SDValue B1 = b.EXTRACT_VECTOR_ELT(B, b.Constant(1));
 
-    SDValue P0 = b.OR(b.PEXT64(A0, MaskNode),
-                      b.SHL(b.PEXT64(A1, MaskNode), b.Constant(32, MVT::i64)));
-    SDValue P1 = b.OR(b.PEXT64(B0, MaskNode),
-                      b.SHL(b.PEXT64(B1, MaskNode), b.Constant(32, MVT::i64)));
+    SDValue P0 = b.TRUNCATE(b.PEXT64(A0, MaskNode), MVT::i32);
+    SDValue P1 = b.TRUNCATE(b.PEXT64(A1, MaskNode), MVT::i32);
+    SDValue P2 = b.TRUNCATE(b.PEXT64(B0, MaskNode), MVT::i32);
+    SDValue P3 = b.TRUNCATE(b.PEXT64(B1, MaskNode), MVT::i32);
 
-    SDValue P[] = {P0, P1};
-    return b.BITCAST(b.BUILD_VECTOR(MVT::v2i64, P), VT);
+    SDValue P[] = {P0, P1, P2, P3};
+    return b.BITCAST(b.BUILD_VECTOR(MVT::v4i32, P), VT);
   }
 
   return SDValue();

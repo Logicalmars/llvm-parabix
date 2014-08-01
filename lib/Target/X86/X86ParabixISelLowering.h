@@ -39,6 +39,10 @@ namespace llvm {
       return DAG->getNode(ISD::BITCAST, dl, VT, A);
     }
 
+    SDValue TRUNCATE(SDValue A, MVT VT) {
+      return DAG->getNode(ISD::TRUNCATE, dl, VT, A);
+    }
+
     SDValue Constant(int Num, MVT NumType = MVT::i32) {
       return DAG->getConstant(Num, NumType);
     }
