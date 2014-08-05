@@ -541,7 +541,8 @@ static SDValue PXPerformVECTOR_SHUFFLECombine(SDNode *N, SelectionDAG &DAG,
   //v16i8 (vector_shuffle v16i8, v16i8, v16i32) can be combined into
   //X86ISD::PACKUS
   //simd<16>::packl
-  if (Subtarget->hasSSE2() && VT == MVT::v16i8 && isPackLowMask(SVOp)) {
+  if (Subtarget->hasSSE2() && VT == MVT::v16i8 && isPackLowMask(SVOp) &&
+      V1.getOpcode() != ISD::UNDEF && V2.getOpcode() != ISD::UNDEF) {
     dbgs() << "Parabix combine: \n";
     N->dumpr();
 
@@ -562,7 +563,8 @@ static SDValue PXPerformVECTOR_SHUFFLECombine(SDNode *N, SelectionDAG &DAG,
 
   //X86ISD::PACKUS cont.
   //For simd<16>::packh
-  if (Subtarget->hasSSE2() && VT == MVT::v16i8 && isPackHighMask(SVOp)) {
+  if (Subtarget->hasSSE2() && VT == MVT::v16i8 && isPackHighMask(SVOp) &&
+      V1.getOpcode() != ISD::UNDEF && V2.getOpcode() != ISD::UNDEF) {
     dbgs() << "Parabix combine: \n";
     N->dumpr();
 
