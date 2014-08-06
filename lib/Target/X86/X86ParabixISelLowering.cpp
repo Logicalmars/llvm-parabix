@@ -64,6 +64,8 @@ static MVT getFullRegisterType(MVT VT) {
     castType = MVT::i32;
   else if (VT.is64BitVector())
     castType = MVT::i64;
+  else if (VT.is128BitVector())
+    castType = MVT::v2i64;
   else
     llvm_unreachable("unsupported parabix vector width");
 
@@ -134,6 +136,10 @@ static void resetOperations()
   addCastAndOpKind(ISD::OR,  MVT::v64i1, ISD::OR);
   addCastAndOpKind(ISD::MULHU,  MVT::v64i1, ISD::AND);
 
+  //cast v64i2 to v2i64 to lower logic ops.
+  addCastAndOpKind(ISD::AND, MVT::v64i2, ISD::AND);
+  addCastAndOpKind(ISD::XOR, MVT::v64i2, ISD::XOR);
+  addCastAndOpKind(ISD::OR,  MVT::v64i2, ISD::OR);
 }
 
 static SDValue getFullRegister(SDValue Op, SelectionDAG &DAG) {
@@ -339,6 +345,7 @@ X86TargetLowering::PXLowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const {
 
   MVT VT = Op.getSimpleValueType();
   unsigned NumElems = Op.getNumOperands();
+  SDNodeTreeBuilder b(Op, &DAG);
 
   // Vectors containing all zeros can be matched by pxor and xorps later
   if (ISD::isBuildVectorAllZeros(Op.getNode())) {
@@ -354,7 +361,6 @@ X86TargetLowering::PXLowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const {
     return getPXOnesVector(VT, Subtarget, DAG, dl);
   }
 
-
   if (VT == MVT::v32i1 || VT == MVT::v64i1) {
     //Brutely insert element
     MVT FullVT = getFullRegisterType(VT);
@@ -369,6 +375,29 @@ X86TargetLowering::PXLowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const {
     }
 
     return Base;
+  }
+
+  if (VT == MVT::v64i2) {
+    //Rearrange index and do 4 shifts and or
+    SmallVector<SmallVector<SDValue, 16>, 4> RearrangedVectors;
+    SmallVector<SDValue, 16> RV;
+    for (unsigned vi = 0; vi < 4; vi++) {
+      RV.clear();
+      for (unsigned i = vi; i < NumElems; i += 4) {
+        RV.push_back(Op.getOperand(i));
+      }
+
+      RearrangedVectors.push_back(RV);
+    }
+
+    //i2 is not legal on X86, so the 64 operands are all i8
+    SDValue V0 = b.BUILD_VECTOR(MVT::v16i8, RearrangedVectors[0]);
+    SDValue V1 = b.BUILD_VECTOR(MVT::v16i8, RearrangedVectors[1]);
+    SDValue V2 = b.BUILD_VECTOR(MVT::v16i8, RearrangedVectors[2]);
+    SDValue V3 = b.BUILD_VECTOR(MVT::v16i8, RearrangedVectors[3]);
+
+    return b.BITCAST(b.OR(b.OR(b.OR(V0, b.SHL<2>(V1)), b.SHL<4>(V2)), b.SHL<6>(V3)),
+                     MVT::v64i2);
   }
 
   llvm_unreachable("lowering build_vector for unsupported type");

@@ -2222,6 +2222,11 @@ let Predicates = [HasBMI2] in {
 //Parabix: bit convert v32i1 to i32, v64i1 to i64
 def : Pat <(i32 (bitconvert (v32i1 GR32X:$src))), (i32 GR32X:$src)>;
 def : Pat <(i64 (bitconvert (v64i1 GR64X:$src))), (i64 GR64X:$src)>;
+//Parabix: bitconvert from v64i2 vector
+def : Pat <(v16i8 (bitconvert (v64i2 VR128PX:$src))), (v16i8 VR128PX:$src)>;
+def : Pat <(v8i16 (bitconvert (v64i2 VR128PX:$src))), (v8i16 VR128PX:$src)>;
+def : Pat <(v4i32 (bitconvert (v64i2 VR128PX:$src))), (v4i32 VR128PX:$src)>;
+def : Pat <(v2i64 (bitconvert (v64i2 VR128PX:$src))), (v2i64 VR128PX:$src)>;
 
 let Predicates = [HasBMI] in {
   def : Pat<(X86bextr GR32:$src1, GR32:$src2),

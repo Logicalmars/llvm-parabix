@@ -47,6 +47,10 @@ def RetCC_X86Common : CallingConv<[
   CCIfType<[v16i8, v8i16, v4i32, v2i64, v4f32, v2f64],
             CCAssignToReg<[XMM0,XMM1,XMM2,XMM3]>>,
 
+  //Parabix 128-bit vectors
+  CCIfType<[v64i2],
+            CCAssignToReg<[XMM0,XMM1,XMM2,XMM3]>>,
+
   // 256-bit vectors are returned in YMM0 and XMM1, when they fit. YMM2 and YMM3
   // can only be used by ABI non-compliant code. This vector type is only
   // supported while using the AVX target feature.
@@ -252,6 +256,11 @@ def CC_X86_64_C : CallingConv<[
             CCIfSubtarget<"hasSSE1()",
             CCAssignToReg<[XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, XMM7]>>>,
 
+  //Parabix
+  CCIfType<[v64i2],
+            CCIfSubtarget<"hasSSE2()",
+            CCAssignToReg<[XMM0, XMM1, XMM2, XMM3, XMM4, XMM5, XMM6, XMM7]>>>,
+
   // The first 8 256-bit vector arguments are passed in YMM registers, unless
   // this is a vararg function.
   // FIXME: This isn't precisely correct; the x86-64 ABI document says that
@@ -276,7 +285,7 @@ def CC_X86_64_C : CallingConv<[
   CCIfType<[f80], CCAssignToStack<0, 0>>,
 
   // Vectors get 16-byte stack slots that are 16-byte aligned.
-  CCIfType<[v16i8, v8i16, v4i32, v2i64, v4f32, v2f64], CCAssignToStack<16, 16>>,
+  CCIfType<[v16i8, v8i16, v4i32, v2i64, v64i2, v4f32, v2f64], CCAssignToStack<16, 16>>,
 
   // 256-bit vectors get 32-byte stack slots that are 32-byte aligned.
   CCIfType<[v32i8, v16i16, v8i32, v4i64, v8f32, v4f64],

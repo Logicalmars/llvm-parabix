@@ -239,7 +239,7 @@ namespace llvm {
 
     /// Parabix helper functions here
     bool isParabixVector() const {
-      return (SimpleTy == MVT::v32i1 || SimpleTy == MVT::v64i1);
+      return (SimpleTy == MVT::v32i1 || SimpleTy == MVT::v64i1 || SimpleTy == MVT::v64i2);
     }
 
     bool isParabixValue() const {
@@ -450,7 +450,7 @@ namespace llvm {
       }
     }
 
-    
+
 
 
     unsigned getSizeInBits() const {

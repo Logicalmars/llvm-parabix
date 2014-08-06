@@ -20,6 +20,7 @@
 #include "llvm/Target/TargetLowering.h"
 #include "llvm/Target/TargetOptions.h"
 #include "llvm/ADT/ArrayRef.h"
+#include "llvm/ADT/SmallVector.h"
 #include "llvm/IR/Intrinsics.h"
 
 namespace llvm {
@@ -114,6 +115,19 @@ namespace llvm {
       assert(A.getSimpleValueType().SimpleTy == Shift.getSimpleValueType().SimpleTy &&
              "SHL value type doesn't match");
       return DAG->getNode(ISD::SHL, dl, A.getSimpleValueType(), A, Shift);
+    }
+
+    template <int sh>
+    SDValue SHL(SDValue A) {
+      MVT VT = A.getSimpleValueType();
+      int NumElts = VT.getVectorNumElements();
+
+      SmallVector<SDValue, 16> Pool;
+      SDValue Cst = Constant(sh, VT.getScalarType());
+      for (int i = 0; i < NumElts; i++)
+        Pool.push_back(Cst);
+
+      return SHL(A, BUILD_VECTOR(VT, Pool));
     }
 
     SDValue PEXT64(SDValue A, SDValue B) {

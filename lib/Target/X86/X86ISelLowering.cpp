@@ -298,13 +298,16 @@ void X86TargetLowering::resetOperationActions() {
   }
 
   // Parabix register class
-  static const MVT ParabixVTs[] = { MVT::v32i1, MVT::v64i1 };
+  static const MVT ParabixVTs[] = { MVT::v32i1, MVT::v64i1, MVT::v64i2 };
   for (unsigned i = 0; i != array_lengthof(ParabixVTs); ++i) {
     if (ParabixVTs[i].is32BitVector()) {
       addRegisterClass(ParabixVTs[i], &X86::GR32XRegClass);
     }
     else if (ParabixVTs[i].is64BitVector() && Subtarget->is64Bit()) {
       addRegisterClass(ParabixVTs[i], &X86::GR64XRegClass);
+    }
+    else if (ParabixVTs[i].is128BitVector() && Subtarget->hasSSE2()) {
+      addRegisterClass(ParabixVTs[i], &X86::VR128PXRegClass);
     }
   }
 
@@ -1557,42 +1560,28 @@ void X86TargetLowering::resetOperationActions() {
   // Clear std::map here.
   resetOperand0Action();
 
-  setOperationAction(ISD::ADD, MVT::v32i1, Custom);
-  setOperationAction(ISD::SUB, MVT::v32i1, Custom);
-  setOperationAction(ISD::MUL, MVT::v32i1, Custom);
-  setOperationAction(ISD::AND, MVT::v32i1, Custom);
-  setOperationAction(ISD::OR, MVT::v32i1, Custom);
-  setOperationAction(ISD::XOR, MVT::v32i1, Custom);
-  setOperationAction(ISD::MULHU, MVT::v32i1, Custom);
-  setOperationAction(ISD::SHL, MVT::v32i1, Custom);
-  setOperationAction(ISD::SRL, MVT::v32i1, Custom);
-  setOperationAction(ISD::SRA, MVT::v32i1, Custom);
-  setOperationAction(ISD::BUILD_VECTOR, MVT::v32i1, Custom);
-  setOperationAction(ISD::EXTRACT_VECTOR_ELT, MVT::v32i1, Custom);
-  setOperationAction(ISD::INSERT_VECTOR_ELT, MVT::v32i1, Custom);
-  setOperationAction(ISD::SCALAR_TO_VECTOR, MVT::v32i1, Custom);
-  setOperationAction(ISD::SETCC, MVT::v32i1, Custom);
-  setOperationAction(ISD::LOAD, MVT::v32i1, Custom);
-  setOperationAction(ISD::STORE, MVT::v32i1, Custom);
+  for (unsigned i = 0; i != array_lengthof(ParabixVTs); ++i) {
+    // v64i1 is only added and lowered for 64bit subtarget
+    if (ParabixVTs[i].is64BitVector() && !Subtarget->is64Bit())
+      continue;
 
-  if (Subtarget->is64Bit()) {
-    setOperationAction(ISD::ADD, MVT::v64i1, Custom);
-    setOperationAction(ISD::SUB, MVT::v64i1, Custom);
-    setOperationAction(ISD::MUL, MVT::v64i1, Custom);
-    setOperationAction(ISD::AND, MVT::v64i1, Custom);
-    setOperationAction(ISD::OR, MVT::v64i1, Custom);
-    setOperationAction(ISD::XOR, MVT::v64i1, Custom);
-    setOperationAction(ISD::MULHU, MVT::v64i1, Custom);
-    setOperationAction(ISD::SHL, MVT::v64i1, Custom);
-    setOperationAction(ISD::SRL, MVT::v64i1, Custom);
-    setOperationAction(ISD::SRA, MVT::v64i1, Custom);
-    setOperationAction(ISD::BUILD_VECTOR, MVT::v64i1, Custom);
-    setOperationAction(ISD::EXTRACT_VECTOR_ELT, MVT::v64i1, Custom);
-    setOperationAction(ISD::INSERT_VECTOR_ELT, MVT::v64i1, Custom);
-    setOperationAction(ISD::SCALAR_TO_VECTOR, MVT::v64i1, Custom);
-    setOperationAction(ISD::SETCC, MVT::v64i1, Custom);
-    setOperationAction(ISD::LOAD, MVT::v64i1, Custom);
-    setOperationAction(ISD::STORE, MVT::v64i1, Custom);
+    setOperationAction(ISD::ADD, ParabixVTs[i], Custom);
+    setOperationAction(ISD::SUB, ParabixVTs[i], Custom);
+    setOperationAction(ISD::MUL, ParabixVTs[i], Custom);
+    setOperationAction(ISD::AND, ParabixVTs[i], Custom);
+    setOperationAction(ISD::OR,  ParabixVTs[i], Custom);
+    setOperationAction(ISD::XOR, ParabixVTs[i], Custom);
+    setOperationAction(ISD::SHL, ParabixVTs[i], Custom);
+    setOperationAction(ISD::SRL, ParabixVTs[i], Custom);
+    setOperationAction(ISD::SRA, ParabixVTs[i], Custom);
+    setOperationAction(ISD::LOAD,               ParabixVTs[i], Custom);
+    setOperationAction(ISD::STORE,              ParabixVTs[i], Custom);
+    setOperationAction(ISD::SETCC,              ParabixVTs[i], Custom);
+    setOperationAction(ISD::MULHU,              ParabixVTs[i], Custom);
+    setOperationAction(ISD::BUILD_VECTOR,       ParabixVTs[i], Custom);
+    setOperationAction(ISD::SCALAR_TO_VECTOR,   ParabixVTs[i], Custom);
+    setOperationAction(ISD::EXTRACT_VECTOR_ELT, ParabixVTs[i], Custom);
+    setOperationAction(ISD::INSERT_VECTOR_ELT,  ParabixVTs[i], Custom);
   }
 
   // We have target-specific dag combine patterns for the following nodes:
