@@ -216,7 +216,39 @@ static SDValue PXLowerShift(SDValue Op, SelectionDAG &DAG) {
 }
 
 static SDValue PXLowerADD(SDValue Op, SelectionDAG &DAG) {
+  MVT VT = Op.getSimpleValueType();
+  MVT FullVT = getFullRegisterType(VT);
+  SDNodeTreeBuilder b(Op, &DAG);
+  SDValue Op1 = Op.getOperand(0);
+  SDValue Op2 = Op.getOperand(1);
+
+  if (VT == MVT::v64i2) {
+    SDValue A1 = b.BITCAST(Op1, FullVT);
+    SDValue A2 = b.BITCAST(Op2, FullVT);
+    SDValue T = b.XOR(A1, A2);
+    return b.BITCAST(b.IFH1(b.HiMask(128, 2), b.XOR(T, b.SHL<1>(b.AND(A1, A2))), T), VT);
+  }
+
   llvm_unreachable("lowering add for unsupported type");
+  return SDValue();
+}
+
+static SDValue PXLowerSUB(SDValue Op, SelectionDAG &DAG) {
+  MVT VT = Op.getSimpleValueType();
+  MVT FullVT = getFullRegisterType(VT);
+  SDNodeTreeBuilder b(Op, &DAG);
+  SDValue Op1 = Op.getOperand(0);
+  SDValue Op2 = Op.getOperand(1);
+
+  if (VT == MVT::v64i2) {
+    SDValue A1 = b.BITCAST(Op1, FullVT);
+    SDValue A2 = b.BITCAST(Op2, FullVT);
+    SDValue T = b.XOR(A1, A2);
+    return b.BITCAST(b.IFH1(b.HiMask(128, 2),
+                            b.XOR(T, b.SHL<1>(b.AND(b.NOT(A1), A2))), T), VT);
+  }
+
+  llvm_unreachable("lowering sub for unsupported type");
   return SDValue();
 }
 
@@ -448,6 +480,29 @@ static SDValue PXLowerSETCC(SDValue Op, SelectionDAG &DAG) {
   return SDValue();
 }
 
+static SDValue PXLowerMUL(SDValue Op, SelectionDAG &DAG) {
+  SDNodeTreeBuilder b(Op, &DAG);
+  MVT VT = Op.getSimpleValueType();
+  MVT FullVT = getFullRegisterType(VT);
+
+  if (VT == MVT::v64i2) {
+    SDValue A1 = b.BITCAST(Op.getOperand(0), FullVT);
+    SDValue A2 = b.BITCAST(Op.getOperand(1), FullVT);
+    SDValue T1 = b.SHL<1>(A1);
+    SDValue T2 = b.SHL<1>(A2);
+
+    return b.BITCAST(b.IFH1(b.HiMask(128, 2),
+                            /* high bit */
+                            b.OR(b.AND(T1, b.AND(A2, b.OR(b.NOT(A1), b.NOT(T2)))),
+                                 b.AND(A1, b.AND(T2, b.OR(b.NOT(T1), b.NOT(A2))))),
+                            /* low bit */
+                            b.AND(A1, A2)), VT);
+  }
+
+  llvm_unreachable("only lowering parabix MUL");
+  return SDValue();
+}
+
 ///Entrance for parabix lowering.
 SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) const {
   //NEED: setOperationAction in target specific lowering (X86ISelLowering.cpp)
@@ -468,10 +523,12 @@ SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) 
     return lowerWithCastAndOp(Op, DAG);
 
   switch (Op.getOpcode()) {
-  default: llvm_unreachable("Should not custom lower this parabix op!");
+  default: llvm_unreachable("[ROOT SWITCH] Should not custom lower this parabix op!");
   case ISD::STORE:              return PXLowerSTORE(Op, DAG);
   case ISD::LOAD:               return PXLowerLOAD(Op, DAG);
   case ISD::ADD:                return PXLowerADD(Op, DAG);
+  case ISD::SUB:                return PXLowerSUB(Op, DAG);
+  case ISD::MUL:                return PXLowerMUL(Op, DAG);
   case ISD::BUILD_VECTOR:       return PXLowerBUILD_VECTOR(Op, DAG);
   case ISD::SHL:
   case ISD::SRA:
@@ -497,15 +554,8 @@ static SDValue PXPerformVSELECTCombine(SDNode *N, SelectionDAG &DAG,
     //v128i1 (select v128i1, v128i1, v128i1) can be combined into logical ops
     if (MaskTy == MVT::v128i1 && VT == MVT::v128i1) {
       dbgs() << "Combining select v128i1 \n";
-
-      SDValue NewMask = DAG.getNode(ISD::BITCAST, dl, MVT::v4i32, Mask);
-      SDValue NewOp1  = DAG.getNode(ISD::BITCAST, dl, MVT::v4i32, N->getOperand(1));
-      SDValue NewOp2  = DAG.getNode(ISD::BITCAST, dl, MVT::v4i32, N->getOperand(2));
-
-      // (NewMask & NewOp1) || (~NewMask & NewOp2)
-      SDValue R = b.OR(b.AND(NewMask, NewOp1), b.AND(b.NOT(NewMask), NewOp2));
-      return DAG.getNode(ISD::BITCAST, dl, MVT::v128i1, R);
-    }
+      return b.IFH1(Mask, N->getOperand(0), N->getOperand(1));
+   }
   }
 
   //v32i8 (select v32i1, v32i8, v32i8) don't have proper lowering on AVX2, so

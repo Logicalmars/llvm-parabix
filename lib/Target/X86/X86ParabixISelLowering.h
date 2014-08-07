@@ -22,6 +22,8 @@
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/IR/Intrinsics.h"
+#include "llvm/Support/MathExtras.h"
+#include <string>
 
 namespace llvm {
   class SDNodeTreeBuilder
@@ -100,6 +102,11 @@ namespace llvm {
       return DAG->getNode(ISD::OR, dl, VT, A, B);
     }
 
+    SDValue XOR(SDValue A, SDValue B) {
+      MVT VT = A.getSimpleValueType();
+      return DAG->getNode(ISD::XOR, dl, VT, A, B);
+    }
+
     SDValue NOT(SDValue A) {
       MVT VT = A.getSimpleValueType();
       return DAG->getNOT(dl, A, VT);
@@ -130,6 +137,40 @@ namespace llvm {
       return SHL(A, BUILD_VECTOR(VT, Pool));
     }
 
+    //High mask of RegisterWidth bits vectors with different field width.
+    //e.g. fieldwidth = 8, mask is 1111000011110000...
+    //return <XX x i64>
+    SDValue HiMask(unsigned RegisterWidth, unsigned FieldWidth) {
+      assert(isPowerOf2_32(FieldWidth) &&
+             isPowerOf2_32(RegisterWidth) &&
+             "all width can only be the power of 2");
+      assert(FieldWidth <= 32 && "HiMask FieldWidth greater than 32");
+
+      //Get i64 mask node
+      std::string mask, finalMask;
+      for (unsigned i = 0; i < FieldWidth/2; i++) mask += "1";
+      for (unsigned i = 0; i < FieldWidth/2; i++) mask += "0";
+      for (unsigned i = 0; i < 64 / mask.size(); i++) finalMask += mask;
+      APInt MaskInt64(64, finalMask, 2);
+      SDValue MaskNode64 = DAG->getConstant(MaskInt64, MVT::i64);
+
+      if (RegisterWidth == 64) {
+        return MaskNode64;
+      }
+      else if (RegisterWidth == 128) {
+        SDValue Pool[] = {MaskNode64, MaskNode64};
+        return BUILD_VECTOR(MVT::v2i64, Pool);
+      }
+      else if (RegisterWidth == 256) {
+        SDValue Pool[] = {MaskNode64, MaskNode64, MaskNode64, MaskNode64};
+        return BUILD_VECTOR(MVT::v4i64, Pool);
+      }
+      else
+        llvm_unreachable("Wrong RegisterWidth in HiMask");
+
+      return SDValue();
+    }
+
     SDValue PEXT64(SDValue A, SDValue B) {
       assert(A.getSimpleValueType() == MVT::i64 &&
              B.getSimpleValueType() == MVT::i64 &&
@@ -140,6 +181,25 @@ namespace llvm {
                               DAG->getConstant(Intrinsic::x86_bmi_pext_64, MVT::i32),
                               A,B);
       return V;
+    }
+
+    //simd<1>::ifh
+    //just like SELECT, but for v128i1 vectors. if Mask[i] == 1, A[i] is chosen.
+    //return with the same ValueType of A.
+    SDValue IFH1(SDValue Mask, SDValue A, SDValue B) {
+      assert(A.getValueType().is128BitVector() &&
+             B.getValueType().is128BitVector() &&
+             Mask.getValueType().is128BitVector() &&
+             "IFH1 only take 128 bit vectors");
+
+      MVT VT = A.getSimpleValueType();
+      SDValue NewMask = BITCAST(Mask, MVT::v4i32);
+      SDValue NewOp1  = BITCAST(A, MVT::v4i32);
+      SDValue NewOp2  = BITCAST(B, MVT::v4i32);
+
+      // (NewMask & NewOp1) || (~NewMask & NewOp2)
+      SDValue R = OR(AND(NewMask, NewOp1), AND(NOT(NewMask), NewOp2));
+      return BITCAST(R, VT);
     }
   };
 }

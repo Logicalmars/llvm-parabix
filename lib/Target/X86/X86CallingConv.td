@@ -436,7 +436,7 @@ def CC_X86_32_Common : CallingConv<[
   CCIfType<[f80], CCAssignToStack<0, 4>>,
 
   // The first 4 SSE vector arguments are passed in XMM registers.
-  CCIfNotVarArg<CCIfType<[v16i8, v8i16, v4i32, v2i64, v4f32, v2f64],
+  CCIfNotVarArg<CCIfType<[v64i2, v16i8, v8i16, v4i32, v2i64, v4f32, v2f64],
                 CCAssignToReg<[XMM0, XMM1, XMM2, XMM3]>>>,
 
   // The first 4 AVX 256-bit vector arguments are passed in YMM registers.
@@ -445,7 +445,7 @@ def CC_X86_32_Common : CallingConv<[
                 CCAssignToReg<[YMM0, YMM1, YMM2, YMM3]>>>>,
 
   // Other SSE vectors get 16-byte stack slots that are 16-byte aligned.
-  CCIfType<[v16i8, v8i16, v4i32, v2i64, v4f32, v2f64], CCAssignToStack<16, 16>>,
+  CCIfType<[v64i2, v16i8, v8i16, v4i32, v2i64, v4f32, v2f64], CCAssignToStack<16, 16>>,
 
   // 256-bit AVX vectors get 32-byte stack slots that are 32-byte aligned.
   CCIfType<[v32i8, v16i16, v8i32, v4i64, v8f32, v4f64],

@@ -2305,6 +2305,8 @@ X86TargetLowering::LowerFormalArguments(SDValue Chain,
         RC = &X86::VR512RegClass;
       else if (RegVT.is256BitVector())
         RC = &X86::VR256RegClass;
+      else if (RegVT == MVT::v64i2)
+        RC = &X86::VR128PXRegClass;
       else if (RegVT.is128BitVector())
         RC = &X86::VR128RegClass;
       else if (RegVT == MVT::x86mmx)
@@ -2317,6 +2319,8 @@ X86TargetLowering::LowerFormalArguments(SDValue Chain,
         RC = &X86::VK16RegClass;
       else if (RegVT == MVT::v32i1)
         RC = &X86::GR32XRegClass;
+      else if (RegVT == MVT::v64i1)
+        RC = &X86::GR64XRegClass;
       else
         llvm_unreachable("Unknown argument type!");
 
