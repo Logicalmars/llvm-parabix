@@ -49,6 +49,7 @@
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Target/TargetOptions.h"
+#include "ParabixGeneratedFuncs.h"
 #include <bitset>
 #include <cctype>
 #include <map>
@@ -58,7 +59,7 @@ using namespace llvm;
 #define DEBUG_TYPE "x86-isel"
 
 //v32i1 => i32, v32i2 => i64, etc
-static MVT getFullRegisterType(MVT VT) {
+MVT getFullRegisterType(MVT VT) {
   MVT castType;
   if (VT.is32BitVector())
     castType = MVT::i32;
@@ -216,17 +217,8 @@ static SDValue PXLowerShift(SDValue Op, SelectionDAG &DAG) {
 }
 
 static SDValue PXLowerADD(SDValue Op, SelectionDAG &DAG) {
-  MVT VT = Op.getSimpleValueType();
-  MVT FullVT = getFullRegisterType(VT);
-  SDNodeTreeBuilder b(Op, &DAG);
-  SDValue Op1 = Op.getOperand(0);
-  SDValue Op2 = Op.getOperand(1);
-
-  if (VT == MVT::v64i2) {
-    SDValue A1 = b.BITCAST(Op1, FullVT);
-    SDValue A2 = b.BITCAST(Op2, FullVT);
-    SDValue T = b.XOR(A1, A2);
-    return b.BITCAST(b.IFH1(b.HiMask(128, 2), b.XOR(T, b.SHL<1>(b.AND(A1, A2))), T), VT);
+  if (Op.getSimpleValueType() == MVT::v64i2) {
+    return GENLowerADD(Op, DAG);
   }
 
   llvm_unreachable("lowering add for unsupported type");
@@ -234,21 +226,20 @@ static SDValue PXLowerADD(SDValue Op, SelectionDAG &DAG) {
 }
 
 static SDValue PXLowerSUB(SDValue Op, SelectionDAG &DAG) {
-  MVT VT = Op.getSimpleValueType();
-  MVT FullVT = getFullRegisterType(VT);
-  SDNodeTreeBuilder b(Op, &DAG);
-  SDValue Op1 = Op.getOperand(0);
-  SDValue Op2 = Op.getOperand(1);
-
-  if (VT == MVT::v64i2) {
-    SDValue A1 = b.BITCAST(Op1, FullVT);
-    SDValue A2 = b.BITCAST(Op2, FullVT);
-    SDValue T = b.XOR(A1, A2);
-    return b.BITCAST(b.IFH1(b.HiMask(128, 2),
-                            b.XOR(T, b.SHL<1>(b.AND(b.NOT(A1), A2))), T), VT);
+  if (Op.getSimpleValueType() == MVT::v64i2) {
+    return GENLowerSUB(Op, DAG);
   }
 
   llvm_unreachable("lowering sub for unsupported type");
+  return SDValue();
+}
+
+static SDValue PXLowerMUL(SDValue Op, SelectionDAG &DAG) {
+  if (Op.getSimpleValueType() == MVT::v64i2) {
+    return GENLowerMUL(Op, DAG);
+  }
+
+  llvm_unreachable("only lowering parabix MUL");
   return SDValue();
 }
 
@@ -444,6 +435,7 @@ static SDValue PXLowerSETCC(SDValue Op, SelectionDAG &DAG) {
   SDValue Op1 = Op.getOperand(1);
   ISD::CondCode CC = cast<CondCodeSDNode>(Op.getOperand(2))->get();
   SDValue NEVec, TransA, TransB, Res, NotOp1, NotOp0;
+  SDNodeTreeBuilder b(Op, &DAG);
 
   if (VT == MVT::v32i1 || VT == MVT::v64i1) {
     switch (CC) {
@@ -475,31 +467,33 @@ static SDValue PXLowerSETCC(SDValue Op, SelectionDAG &DAG) {
       return DAG.getNOT(dl, Res, VT);
     }
   }
-
-  llvm_unreachable("only lowering parabix SETCC");
-  return SDValue();
-}
-
-static SDValue PXLowerMUL(SDValue Op, SelectionDAG &DAG) {
-  SDNodeTreeBuilder b(Op, &DAG);
-  MVT VT = Op.getSimpleValueType();
-  MVT FullVT = getFullRegisterType(VT);
-
-  if (VT == MVT::v64i2) {
-    SDValue A1 = b.BITCAST(Op.getOperand(0), FullVT);
-    SDValue A2 = b.BITCAST(Op.getOperand(1), FullVT);
-    SDValue T1 = b.SHL<1>(A1);
-    SDValue T2 = b.SHL<1>(A2);
-
-    return b.BITCAST(b.IFH1(b.HiMask(128, 2),
-                            /* high bit */
-                            b.OR(b.AND(T1, b.AND(A2, b.OR(b.NOT(A1), b.NOT(T2)))),
-                                 b.AND(A1, b.AND(T2, b.OR(b.NOT(T1), b.NOT(A2))))),
-                            /* low bit */
-                            b.AND(A1, A2)), VT);
+  else if (VT == MVT::v64i2) {
+    switch (CC) {
+    default: llvm_unreachable("Can't lower this parabix SETCC");
+    case ISD::SETEQ:  return GENLowerICMP_EQ(Op, DAG);
+    case ISD::SETLT:  return GENLowerICMP_SLT(Op, DAG);
+    case ISD::SETGT:  return GENLowerICMP_SGT(Op, DAG);
+    case ISD::SETULT: return GENLowerICMP_ULT(Op, DAG);
+    case ISD::SETUGT: return GENLowerICMP_UGT(Op, DAG);
+    case ISD::SETNE:
+      Res = GENLowerICMP_EQ(Op, DAG);
+      return b.NOT(Res);
+    case ISD::SETGE:
+      Res = GENLowerICMP_SLT(Op, DAG);
+      return b.NOT(Res);
+    case ISD::SETLE:
+      Res = GENLowerICMP_SGT(Op, DAG);
+      return b.NOT(Res);
+    case ISD::SETUGE:
+      Res = GENLowerICMP_ULT(Op, DAG);
+      return b.NOT(Res);
+    case ISD::SETULE:
+      Res = GENLowerICMP_UGT(Op, DAG);
+      return b.NOT(Res);
+    }
   }
 
-  llvm_unreachable("only lowering parabix MUL");
+  llvm_unreachable("only lowering parabix SETCC");
   return SDValue();
 }
 
