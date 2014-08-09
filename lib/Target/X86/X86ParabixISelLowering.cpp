@@ -210,7 +210,14 @@ static SDValue PXLowerShift(SDValue Op, SelectionDAG &DAG) {
   else if (VectorEleType == MVT::i1 && Op.getOpcode() == ISD::SRA) {
     return A;
   }
-  else
+  else if (VT == MVT::v64i2) {
+    if (Op.getOpcode() == ISD::SHL)
+      return GENLowerSHL(Op, DAG);
+    else if (Op.getOpcode() == ISD::SRL)
+      return GENLowerLSHR(Op, DAG);
+    else
+      return GENLowerASHR(Op, DAG);
+  } else
     llvm_unreachable("lowering undefined parabix shift ops");
 
   return DAG.getNode(ISD::BITCAST, dl, VT, res);
