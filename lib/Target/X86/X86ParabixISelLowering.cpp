@@ -253,6 +253,7 @@ static SDValue PXLowerMUL(SDValue Op, SelectionDAG &DAG) {
 static SDValue PXLowerINSERT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) {
   MVT VT = Op.getSimpleValueType();
   MVT FullVT = getFullRegisterType(VT);
+  SDNodeTreeBuilder b(Op, &DAG);
 
   SDLoc dl(Op);
   SDValue N0 = Op.getOperand(0); // vector <val>
@@ -292,6 +293,23 @@ static SDValue PXLowerINSERT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) {
     // Cast back
     return DAG.getNode(ISD::BITCAST, dl, VT, Res);
   }
+  else if (VT == MVT::v64i2) {
+    //extract an i32 from v4i32 and insert i2 into proper location.
+    //then, insert the modified i32 back
+    if (N2.getSimpleValueType() != MVT::i32)
+      N2 = b.ZERO_EXTEND(N2, MVT::i32);
+    SDValue IdxVec = b.UDIV(N2, b.Constant(16));
+    SDValue IdxInside = b.UREM(N2, b.Constant(16));
+
+    SDValue TransVal = b.BITCAST(N0, MVT::v4i32);
+    SDValue ExtVal = b.EXTRACT_VECTOR_ELT(TransVal, IdxVec);
+    SDValue NewElt = b.SHL(b.ZERO_EXTEND(b.AND(N1, b.Constant(3, MVT::i8)), MVT::i32),
+                           b.MUL(IdxInside, b.Constant(2)));
+    SDValue Mask   = b.SHL(b.Constant(3), b.MUL(IdxInside, b.Constant(2)));
+
+    ExtVal = b.OR(b.AND(ExtVal, b.NOT(Mask)), NewElt);
+    return b.BITCAST(b.INSERT_VECTOR_ELT(TransVal, ExtVal, IdxVec), MVT::v64i2);
+  }
 
   llvm_unreachable("lowering insert_vector_elt for unsupported type");
   return SDValue();
@@ -303,6 +321,7 @@ static SDValue PXLowerEXTRACT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) {
   MVT VecVT = Vec.getSimpleValueType();
   MVT FullVT = getFullRegisterType(VecVT);
   SDValue Idx = Op.getOperand(1);
+  SDNodeTreeBuilder b(Op, &DAG);
 
   if (VecVT.getVectorElementType() == MVT::i1) {
     //VecVT is v32i1 or v64i1
@@ -311,6 +330,18 @@ static SDValue PXLowerEXTRACT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) {
     SDValue ShiftV = DAG.getNode(ISD::SRL, dl, FullVT, TransV, Idx);
     return DAG.getNode(ISD::TRUNCATE, dl, MVT::i8,
                        DAG.getNode(ISD::AND, dl, FullVT, ShiftV, DAG.getConstant(1, FullVT)));
+  }
+  else if (VecVT == MVT::v64i2) {
+    if (Idx.getSimpleValueType() != MVT::i32)
+      Idx = b.ZERO_EXTEND(Idx, MVT::i32);
+    SDValue IdxVec = b.UDIV(Idx, b.Constant(16));
+    SDValue IdxInside = b.UREM(Idx, b.Constant(16));
+
+    SDValue TransVal = b.BITCAST(Vec, MVT::v4i32);
+    SDValue ExtVal = b.EXTRACT_VECTOR_ELT(TransVal, IdxVec);
+
+    return b.TRUNCATE(b.AND(b.SRL(ExtVal, b.MUL(IdxInside, b.Constant(2))), b.Constant(3)),
+                      MVT::i8);
   }
 
   llvm_unreachable("lowering extract_vector_elt for unsupported type");
@@ -323,17 +354,27 @@ static SDValue PXLowerSCALAR_TO_VECTOR(SDValue Op, SelectionDAG &DAG) {
   MVT FullVT = getFullRegisterType(VecVT);
   SDValue Val = Op.getOperand(0);
   EVT EltVT = VecVT.getVectorElementType();
+  SDNodeTreeBuilder b(Op, &DAG);
 
   assert(EltVT.isInteger() && Val.getValueType().bitsGE(EltVT) &&
          "incorrect scalar_to_vector parameters");
+
+  //Lowering assumes i8 is the smallest legal integer, which is true on X86
   if (VecVT == MVT::v32i1 || VecVT == MVT::v64i1) {
     SDValue Trunc = DAG.getNode(ISD::AND, dl, MVT::i8, DAG.getConstant(1, MVT::i8),
                                 DAG.getNode(ISD::TRUNCATE, dl, MVT::i8, Val));
     SDValue Ext = DAG.getNode(ISD::ANY_EXTEND, dl, FullVT, Trunc);
     return DAG.getNode(ISD::BITCAST, dl, VecVT, Ext);
   }
+  else if (VecVT == MVT::v64i2) {
+    SDValue R1 = b.ANY_EXTEND(b.AND(b.TRUNCATE(Val, MVT::i8), b.Constant(3, MVT::i8)),
+                              MVT::i32);
+    SDValue R2 = DAG.getNode(ISD::SCALAR_TO_VECTOR, dl, MVT::v4i32, R1);
+    return b.BITCAST(R2, MVT::v64i2);
+  }
 
   llvm_unreachable("lowering unsupported scalar_to_vector");
+  return SDValue();
 }
 
 //get zero vector for parabix

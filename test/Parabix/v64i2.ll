@@ -44,3 +44,13 @@ entry:
 
   ret <64 x i2> %e
 }
+
+define <64 x i2> @test_ins_ext_element(<64 x i2> %a) {
+entry:
+  ;CHECK-LABEL: test_ins_ext_element
+  %b = bitcast <2 x i64> <i64 34223, i64 34223> to <64 x i2>
+  %c = extractelement <64 x i2> %a, i32 0
+  %d = insertelement <64 x i2> %b, i2 %c, i32 1
+
+  ret <64 x i2> %d
+}

@@ -76,6 +76,11 @@ namespace llvm {
       return EXTRACT_VECTOR_ELT(Vec, Constant(Idx));
     }
 
+    SDValue INSERT_VECTOR_ELT(SDValue Vec, SDValue Elt, SDValue Idx) {
+      MVT VT = Vec.getSimpleValueType();
+      return DAG->getNode(ISD::INSERT_VECTOR_ELT, dl, VT, Vec, Elt, Idx);
+    }
+
     // int Mask[] = {...}, call with &Mask[0]
     SDValue VECTOR_SHUFFLE(SDValue Vec0, SDValue Vec1, const int * Mask) {
       MVT VT = Vec0.getSimpleValueType();
@@ -85,6 +90,18 @@ namespace llvm {
     SDValue SIGN_EXTEND_INREG(SDValue Val, MVT FromVT, MVT ToVT) {
       return DAG->getNode(ISD::SIGN_EXTEND_INREG, dl, ToVT, Val,
                           DAG->getValueType(FromVT));
+    }
+
+    SDValue ANY_EXTEND(SDValue Val, MVT ToVT) {
+      return DAG->getNode(ISD::ANY_EXTEND, dl, ToVT, Val);
+    }
+
+    SDValue ZERO_EXTEND(SDValue Val, MVT ToVT) {
+      return DAG->getNode(ISD::ZERO_EXTEND, dl, ToVT, Val);
+    }
+
+    SDValue SIGN_EXTEND(SDValue Val, MVT ToVT) {
+      return DAG->getNode(ISD::SIGN_EXTEND, dl, ToVT, Val);
     }
 
     SDValue SELECT(SDValue Cond, SDValue TrueVal, SDValue FalseVal) {
@@ -110,6 +127,21 @@ namespace llvm {
     SDValue NOT(SDValue A) {
       MVT VT = A.getSimpleValueType();
       return DAG->getNOT(dl, A, VT);
+    }
+
+    SDValue MUL(SDValue A, SDValue B) {
+      MVT VT = A.getSimpleValueType();
+      return DAG->getNode(ISD::MUL, dl, VT, A, B);
+    }
+
+    SDValue UDIV(SDValue A, SDValue B) {
+      MVT VT = A.getSimpleValueType();
+      return DAG->getNode(ISD::UDIV, dl, VT, A, B);
+    }
+
+    SDValue UREM(SDValue A, SDValue B) {
+      MVT VT = A.getSimpleValueType();
+      return DAG->getNode(ISD::UREM, dl, VT, A, B);
     }
 
     SDValue SRL(SDValue A, SDValue Shift) {
