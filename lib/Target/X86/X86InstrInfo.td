@@ -2235,6 +2235,22 @@ def : Pat <(v64i2 (bitconvert (v8i16 VR128PX:$src))), (v64i2 VR128PX:$src)>;
 def : Pat <(v64i2 (bitconvert (v16i8 VR128PX:$src))), (v64i2 VR128PX:$src)>;
 def : Pat <(v64i2 (bitconvert (v2f64 VR128PX:$src))), (v64i2 VR128PX:$src)>;
 def : Pat <(v64i2 (bitconvert (v4f32 VR128PX:$src))), (v64i2 VR128PX:$src)>;
+//Parabix bitconvert from/to v32i4 vector
+def : Pat <(v64i2 (bitconvert (v32i4 VR128PX:$src))), (v64i2 VR128PX:$src)>;
+def : Pat <(v16i8 (bitconvert (v32i4 VR128PX:$src))), (v16i8 VR128PX:$src)>;
+def : Pat <(v8i16 (bitconvert (v32i4 VR128PX:$src))), (v8i16 VR128PX:$src)>;
+def : Pat <(v4i32 (bitconvert (v32i4 VR128PX:$src))), (v4i32 VR128PX:$src)>;
+def : Pat <(v2i64 (bitconvert (v32i4 VR128PX:$src))), (v2i64 VR128PX:$src)>;
+def : Pat <(v4f32 (bitconvert (v32i4 VR128PX:$src))), (v4f32 VR128PX:$src)>;
+def : Pat <(v2f64 (bitconvert (v32i4 VR128PX:$src))), (v2f64 VR128PX:$src)>;
+def : Pat <(v32i4 (bitconvert (v2i64 VR128PX:$src))), (v32i4 VR128PX:$src)>;
+def : Pat <(v32i4 (bitconvert (v4i32 VR128PX:$src))), (v32i4 VR128PX:$src)>;
+def : Pat <(v32i4 (bitconvert (v8i16 VR128PX:$src))), (v32i4 VR128PX:$src)>;
+def : Pat <(v32i4 (bitconvert (v16i8 VR128PX:$src))), (v32i4 VR128PX:$src)>;
+def : Pat <(v32i4 (bitconvert (v64i2 VR128PX:$src))), (v32i4 VR128PX:$src)>;
+def : Pat <(v32i4 (bitconvert (v2f64 VR128PX:$src))), (v32i4 VR128PX:$src)>;
+def : Pat <(v32i4 (bitconvert (v4f32 VR128PX:$src))), (v32i4 VR128PX:$src)>;
+
 
 let Predicates = [HasBMI] in {
   def : Pat<(X86bextr GR32:$src1, GR32:$src2),

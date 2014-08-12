@@ -10,6 +10,12 @@
 // This file defines the interfaces that Parabix uses to lower LLVM code into a
 // selection DAG on X86.
 //
+// Lowering Strategy Sequence:
+// For LowerParabixOperation, we check if the op fits in CastAndOpKind first. If fits,
+// lowering process is done and terminated. Otherwise, we would check those general
+// policies (like in-place vector promotion). If fail again, custom lowering code will
+// be executed (like PXLowerADD).
+//
 //===----------------------------------------------------------------------------===//
 
 #include "X86ISelLowering.h"
@@ -110,9 +116,21 @@ static SDValue PXLowerLOAD(SDValue Op, SelectionDAG &DAG) {
 typedef std::pair<ISD::NodeType, MVT> CastAndOpKind;
 static std::map<CastAndOpKind, ISD::NodeType> CAOops;
 
+enum PXLegalizeAction {
+  InPlacePromote
+};
+
+typedef CastAndOpKind OpKind;
+static std::map<OpKind, PXLegalizeAction> OpKindActions;
+
 static void addCastAndOpKind(ISD::NodeType Op, MVT VT, ISD::NodeType ReplaceOp)
 {
   CAOops[std::make_pair(Op, VT)] = ReplaceOp;
+}
+
+static void addOpKindAction(ISD::NodeType Op, MVT VT, PXLegalizeAction action)
+{
+  OpKindActions[std::make_pair(Op, VT)] = action;
 }
 
 static void resetOperations()
@@ -141,6 +159,14 @@ static void resetOperations()
   addCastAndOpKind(ISD::AND, MVT::v64i2, ISD::AND);
   addCastAndOpKind(ISD::XOR, MVT::v64i2, ISD::XOR);
   addCastAndOpKind(ISD::OR,  MVT::v64i2, ISD::OR);
+
+  addCastAndOpKind(ISD::AND, MVT::v32i4, ISD::AND);
+  addCastAndOpKind(ISD::XOR, MVT::v32i4, ISD::XOR);
+  addCastAndOpKind(ISD::OR,  MVT::v32i4, ISD::OR);
+
+  addOpKindAction(ISD::ADD, MVT::v32i4, InPlacePromote);
+  addOpKindAction(ISD::SUB, MVT::v32i4, InPlacePromote);
+  addOpKindAction(ISD::MUL, MVT::v32i4, InPlacePromote);
 }
 
 static SDValue getFullRegister(SDValue Op, SelectionDAG &DAG) {
@@ -148,6 +174,49 @@ static SDValue getFullRegister(SDValue Op, SelectionDAG &DAG) {
   SDLoc dl(Op);
 
   return DAG.getNode(ISD::BITCAST, dl, getFullRegisterType(VT), Op);
+}
+
+//Promote vector type in place, doubling fieldwidth within the same register
+//e.g. v32i4 => v16i8
+static MVT PromoteTypeDouble(MVT VT) {
+  unsigned RegisterWidth = VT.getSizeInBits();
+  unsigned FieldWidth = VT.getScalarSizeInBits();
+  unsigned NumElems = RegisterWidth / FieldWidth;
+
+  MVT ToVT = MVT::getVectorVT(MVT::getIntegerVT(FieldWidth * 2), NumElems / 2);
+  return ToVT;
+}
+
+//Root function for general policy lowering. Register the OpKind in resetOperations,
+//then the policy will be executed here.
+static SDValue lowerWithOpAction(SDValue Op, SelectionDAG &DAG) {
+  MVT VT = Op.getSimpleValueType();
+  OpKind kind = std::make_pair((ISD::NodeType)Op.getOpcode(), VT);
+  SDNodeTreeBuilder b(Op, &DAG);
+  unsigned RegisterWidth = VT.getSizeInBits();
+  unsigned FieldWidth = VT.getScalarSizeInBits();
+  SDValue Op0 = Op.getOperand(0);
+  SDValue Op1 = Op.getOperand(1);
+
+  switch (OpKindActions[kind]) {
+  default: llvm_unreachable("Unknown OpAction to lower parabix op");
+  case InPlacePromote:
+    MVT DoubleVT = PromoteTypeDouble(VT);
+    SDValue Himask = b.HiMask(RegisterWidth, FieldWidth * 2);
+    SDValue R = b.IFH1(Himask,
+                       /* high bits */
+                       b.DoOp(DoubleVT,
+                              b.AND(getFullRegister(Op0, DAG), Himask),
+                              b.AND(getFullRegister(Op1, DAG), Himask)),
+                       /* low bits */
+                       b.DoOp(DoubleVT, Op0, Op1));
+    dbgs() << "lowering into: \n";
+    R.dumpr();
+    return b.BITCAST(R, VT);
+  }
+
+  llvm_unreachable("Reach the end of lowerWithOpAction");
+  return SDValue();
 }
 
 //Bitcast this vector to a full length integer and then do one op
@@ -471,6 +540,26 @@ X86TargetLowering::PXLowerBUILD_VECTOR(SDValue Op, SelectionDAG &DAG) const {
                      MVT::v64i2);
   }
 
+  if (VT == MVT::v32i4) {
+    //Rearrange index and do 2 shifts and or
+    //We have 32 x i8 as build_vector oprand, we build 2 v16i8, V0 and V1, then
+    //we can return the result as V0 | (V1 << 4), where
+    //V0 = build_vector(Op0, Op2, Op4, ... , Op30)
+    //V1 = build_vector(Op1, Op3, Op5, ... , Op31)
+    SmallVector<SDValue, 2> V;
+    SmallVector<SDValue, 16> RowV;
+    for (unsigned vi = 0; vi < 2; vi ++) {
+      RowV.clear();
+      for (unsigned i = vi; i < NumElems; i += 2) {
+        RowV.push_back(Op.getOperand(i));
+      }
+
+      V.push_back(b.BUILD_VECTOR(MVT::v16i8, RowV));
+    }
+
+    return b.BITCAST(b.OR(V[0], b.SHL<4>(V[1])), VT);
+  }
+
   llvm_unreachable("lowering build_vector for unsupported type");
   return SDValue();
 }
@@ -563,6 +652,9 @@ SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) 
   CastAndOpKind kind = std::make_pair((ISD::NodeType)Op.getOpcode(), VT);
   if (CAOops.find(kind) != CAOops.end())
     return lowerWithCastAndOp(Op, DAG);
+  //Check general policy
+  if (OpKindActions.find((OpKind) kind) != OpKindActions.end())
+    return lowerWithOpAction(Op, DAG);
 
   switch (Op.getOpcode()) {
   default: llvm_unreachable("[ROOT SWITCH] Should not custom lower this parabix op!");

@@ -38,6 +38,16 @@ namespace llvm {
     SDNodeTreeBuilder(SelectionDAG *_DAG, SDLoc _dl)
       : DAG(_DAG), dl(_dl) {}
 
+    //use the same OpCode with Op
+    SDValue DoOp(MVT VT, SDValue Op0, SDValue Op1) {
+      if (Op0.getSimpleValueType() != VT)
+        Op0 = BITCAST(Op0, VT);
+      if (Op1.getSimpleValueType() != VT)
+        Op1 = BITCAST(Op1, VT);
+
+      return DAG->getNode(Op.getOpcode(), dl, VT, Op0, Op1);
+    }
+
     SDValue BITCAST(SDValue A, MVT VT) {
       return DAG->getNode(ISD::BITCAST, dl, VT, A);
     }
