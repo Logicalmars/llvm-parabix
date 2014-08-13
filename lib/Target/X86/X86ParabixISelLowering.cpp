@@ -167,6 +167,7 @@ static void resetOperations()
   addOpKindAction(ISD::ADD, MVT::v32i4, InPlacePromote);
   addOpKindAction(ISD::SUB, MVT::v32i4, InPlacePromote);
   addOpKindAction(ISD::MUL, MVT::v32i4, InPlacePromote);
+  addOpKindAction(ISD::SETCC, MVT::v32i4, InPlacePromote);
 
   addOpKindAction(ISD::MUL, MVT::v16i8, InPlacePromote);
 }
@@ -214,8 +215,15 @@ static SDValue lowerWithOpAction(SDValue Op, SelectionDAG &DAG) {
                                         b.SRL(FieldWidth, b.BITCAST(Op0, DoubleVT)),
                                         b.SRL(FieldWidth, b.BITCAST(Op1, DoubleVT))));
     }
+    SDValue LowBits = b.DoOp(DoubleVT, Op0, Op1);
+    if (Op.getOpcode() == ISD::SETCC) {
+      //SETCC needs to shift the lowbits left, to properly set the sign bit.
+      LowBits = b.DoOp(DoubleVT,
+                       b.SHL(FieldWidth, b.BITCAST(Op0, DoubleVT)),
+                       b.SHL(FieldWidth, b.BITCAST(Op1, DoubleVT)));
+    }
 
-    SDValue R = b.IFH1(Himask, HiBits, b.DoOp(DoubleVT, Op0, Op1));
+    SDValue R = b.IFH1(Himask, HiBits, LowBits);
     dbgs() << "lowering into: \n";
     R.dumpr();
     return b.BITCAST(R, VT);

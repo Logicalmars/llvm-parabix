@@ -45,6 +45,9 @@ namespace llvm {
       if (Op1.getSimpleValueType() != VT)
         Op1 = BITCAST(Op1, VT);
 
+      if (Op.getOpcode() == ISD::SETCC)
+        return DAG->getNode(ISD::SETCC, dl, VT, Op0, Op1, Op.getOperand(2));
+
       return DAG->getNode(Op.getOpcode(), dl, VT, Op0, Op1);
     }
 
