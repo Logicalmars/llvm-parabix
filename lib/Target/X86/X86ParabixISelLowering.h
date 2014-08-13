@@ -63,6 +63,22 @@ namespace llvm {
       return DAG->getConstant(Num, NumType);
     }
 
+    SDValue Constant(std::string I64String, MVT NumType) {
+      assert(NumType.getScalarType() == MVT::i64 &&
+             "Constant from I64String has wrong NumType");
+      assert(I64String.size() == 64 &&
+             "I64String should be binary number");
+
+      int NumElts = NumType.getVectorNumElements();
+
+      APInt MaskInt64(64, I64String, 2);
+      SDValue MaskNode64 = DAG->getConstant(MaskInt64, MVT::i64);
+      SmallVector<SDValue, 4> Pool;
+      for (int i = 0; i < NumElts; ++i) Pool.push_back(MaskNode64);
+
+      return BUILD_VECTOR(NumType, Pool);
+    }
+
     SDValue Undef(EVT VT) {
       return DAG->getUNDEF(VT);
     }

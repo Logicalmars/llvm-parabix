@@ -164,7 +164,7 @@ static void resetOperations()
   addCastAndOpKind(ISD::XOR, MVT::v32i4, ISD::XOR);
   addCastAndOpKind(ISD::OR,  MVT::v32i4, ISD::OR);
 
-  addOpKindAction(ISD::ADD, MVT::v32i4, InPlacePromote);
+  //A custom lowering for v32i4 add is implmented. So ADD is not here.
   addOpKindAction(ISD::SUB, MVT::v32i4, InPlacePromote);
   addOpKindAction(ISD::MUL, MVT::v32i4, InPlacePromote);
   addOpKindAction(ISD::SETCC, MVT::v32i4, InPlacePromote);
@@ -307,8 +307,31 @@ static SDValue PXLowerShift(SDValue Op, SelectionDAG &DAG) {
 }
 
 static SDValue PXLowerADD(SDValue Op, SelectionDAG &DAG) {
-  if (Op.getSimpleValueType() == MVT::v64i2) {
+  MVT VT = Op.getSimpleValueType();
+  SDNodeTreeBuilder b(Op, &DAG);
+  SDValue Op0 = Op.getOperand(0);
+  SDValue Op1 = Op.getOperand(1);
+
+  if (VT == MVT::v64i2) {
     return GENLowerADD(Op, DAG);
+  }
+  else if (VT == MVT::v32i4) {
+    // Use mask = 0x8888... to mask out high bits and then we can do the i4 add
+    // with only one paddb.
+    std::string mask = "";
+    for (unsigned int i = 0; i < 16; i++) mask += "1000";
+    SDValue Mask = b.Constant(mask, MVT::v2i64);
+
+    MVT DoubleVT = MVT::v16i8;
+
+    SDValue Ah = b.AND(Mask, b.BITCAST(Op0, MVT::v2i64));
+    SDValue Bh = b.AND(Mask, b.BITCAST(Op1, MVT::v2i64));
+    SDValue R = b.DoOp(DoubleVT,
+                       b.AND(b.BITCAST(Op0, MVT::v2i64), b.NOT(Ah)),
+                       b.AND(b.BITCAST(Op1, MVT::v2i64), b.NOT(Bh)));
+    R = b.XOR(R, b.BITCAST(b.XOR(Ah, Bh), DoubleVT));
+
+    return b.BITCAST(R, VT);
   }
 
   llvm_unreachable("lowering add for unsupported type");
@@ -343,6 +366,10 @@ static SDValue PXLowerINSERT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) {
   SDValue N1 = Op.getOperand(1); // elt
   SDValue N2 = Op.getOperand(2); // idx
 
+  int RegisterWidth = VT.getSizeInBits();
+  int NumElts = VT.getVectorNumElements();
+  int FieldWidth = RegisterWidth / NumElts;
+
   if (VT.getVectorElementType() == MVT::i1) {
     //VT is v32i1 or v64i1
     //Cast VT into full register and do bit manipulation.
@@ -376,22 +403,32 @@ static SDValue PXLowerINSERT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) {
     // Cast back
     return DAG.getNode(ISD::BITCAST, dl, VT, Res);
   }
-  else if (VT == MVT::v64i2) {
-    //extract an i32 from v4i32 and insert i2 into proper location.
+  else {
+    //General strategy here
+    //extract an i32 from the vector and insert N1 into proper location.
     //then, insert the modified i32 back
+    assert(VT.getVectorElementType().bitsLE(MVT::i8) &&
+           "general INSERT_VECTOR_ELT only works with FieldWidth <= 8");
+
     if (N2.getSimpleValueType() != MVT::i32)
       N2 = b.ZERO_EXTEND(N2, MVT::i32);
-    SDValue IdxVec = b.UDIV(N2, b.Constant(16));
-    SDValue IdxInside = b.UREM(N2, b.Constant(16));
 
-    SDValue TransVal = b.BITCAST(N0, MVT::v4i32);
+    int I32VecNumElts = RegisterWidth / 32;
+    MVT I32VecType = MVT::getVectorVT(MVT::i32, I32VecNumElts);
+    int lowbitsMask = (1 << FieldWidth) - 1;
+
+    SDValue IdxVec = b.UDIV(N2, b.Constant(NumElts / I32VecNumElts));
+    SDValue IdxInside = b.UREM(N2, b.Constant(NumElts / I32VecNumElts));
+
+    SDValue TransVal = b.BITCAST(N0, I32VecType);
     SDValue ExtVal = b.EXTRACT_VECTOR_ELT(TransVal, IdxVec);
-    SDValue NewElt = b.SHL(b.ZERO_EXTEND(b.AND(N1, b.Constant(3, MVT::i8)), MVT::i32),
-                           b.MUL(IdxInside, b.Constant(2)));
-    SDValue Mask   = b.SHL(b.Constant(3), b.MUL(IdxInside, b.Constant(2)));
+    SDValue NewElt = b.SHL(b.ZERO_EXTEND(b.AND(N1, b.Constant(lowbitsMask, MVT::i8)),
+                                         MVT::i32),
+                           b.MUL(IdxInside, b.Constant(FieldWidth)));
+    SDValue Mask   = b.SHL(b.Constant(lowbitsMask), b.MUL(IdxInside, b.Constant(FieldWidth)));
 
     ExtVal = b.OR(b.AND(ExtVal, b.NOT(Mask)), NewElt);
-    return b.BITCAST(b.INSERT_VECTOR_ELT(TransVal, ExtVal, IdxVec), MVT::v64i2);
+    return b.BITCAST(b.INSERT_VECTOR_ELT(TransVal, ExtVal, IdxVec), VT);
   }
 
   llvm_unreachable("lowering insert_vector_elt for unsupported type");
@@ -406,6 +443,10 @@ static SDValue PXLowerEXTRACT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) {
   SDValue Idx = Op.getOperand(1);
   SDNodeTreeBuilder b(Op, &DAG);
 
+  int RegisterWidth = VecVT.getSizeInBits();
+  int NumElts = VecVT.getVectorNumElements();
+  int FieldWidth = RegisterWidth / NumElts;
+
   if (VecVT.getVectorElementType() == MVT::i1) {
     //VecVT is v32i1 or v64i1
     //TRUNC(AND(1, SRL(FULL_REG(VecVT), Idx)), i8)
@@ -414,16 +455,26 @@ static SDValue PXLowerEXTRACT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) {
     return DAG.getNode(ISD::TRUNCATE, dl, MVT::i8,
                        DAG.getNode(ISD::AND, dl, FullVT, ShiftV, DAG.getConstant(1, FullVT)));
   }
-  else if (VecVT == MVT::v64i2) {
+  else {
+    //General strategy here, extract i32 from the vector and then do shifting
+    //and truncate.
+    assert(VecVT.getVectorElementType().bitsLE(MVT::i8) &&
+           "general EXTRACT_VECTOR_ELT only works with FieldWidth <= 8");
+
     if (Idx.getSimpleValueType() != MVT::i32)
       Idx = b.ZERO_EXTEND(Idx, MVT::i32);
-    SDValue IdxVec = b.UDIV(Idx, b.Constant(16));
-    SDValue IdxInside = b.UREM(Idx, b.Constant(16));
 
-    SDValue TransVal = b.BITCAST(Vec, MVT::v4i32);
+    int I32VecNumElts = RegisterWidth / 32;
+    MVT I32VecType = MVT::getVectorVT(MVT::i32, I32VecNumElts);
+
+    SDValue IdxVec = b.UDIV(Idx, b.Constant(NumElts / I32VecNumElts));
+    SDValue IdxInside = b.UREM(Idx, b.Constant(NumElts / I32VecNumElts));
+
+    SDValue TransVal = b.BITCAST(Vec, I32VecType);
     SDValue ExtVal = b.EXTRACT_VECTOR_ELT(TransVal, IdxVec);
 
-    return b.TRUNCATE(b.AND(b.SRL(ExtVal, b.MUL(IdxInside, b.Constant(2))), b.Constant(3)),
+    return b.TRUNCATE(b.AND(b.SRL(ExtVal, b.MUL(IdxInside, b.Constant(FieldWidth))),
+                            b.Constant( (1 << FieldWidth) - 1 )),
                       MVT::i8);
   }
 
@@ -449,11 +500,17 @@ static SDValue PXLowerSCALAR_TO_VECTOR(SDValue Op, SelectionDAG &DAG) {
     SDValue Ext = DAG.getNode(ISD::ANY_EXTEND, dl, FullVT, Trunc);
     return DAG.getNode(ISD::BITCAST, dl, VecVT, Ext);
   }
-  else if (VecVT == MVT::v64i2) {
-    SDValue R1 = b.ANY_EXTEND(b.AND(b.TRUNCATE(Val, MVT::i8), b.Constant(3, MVT::i8)),
-                              MVT::i32);
-    SDValue R2 = DAG.getNode(ISD::SCALAR_TO_VECTOR, dl, MVT::v4i32, R1);
-    return b.BITCAST(R2, MVT::v64i2);
+  else {
+    assert(Val.getSimpleValueType().bitsLE(MVT::i8) &&
+           "GetVectorFromScalarInteger only work with i2 or i4");
+
+    MVT FullVecVT = MVT::getVectorVT(MVT::i32, VecVT.getSizeInBits() / 32);
+    int mask = (1 << EltVT.getSizeInBits()) - 1;
+
+    SDValue R1 = b.ANY_EXTEND(b.AND(b.TRUNCATE(Val, MVT::i8),
+                                    b.Constant(mask, MVT::i8)), MVT::i32);
+    SDValue R2 = DAG.getNode(ISD::SCALAR_TO_VECTOR, dl, FullVecVT, R1);
+    return b.BITCAST(R2, VecVT);
   }
 
   llvm_unreachable("lowering unsupported scalar_to_vector");
