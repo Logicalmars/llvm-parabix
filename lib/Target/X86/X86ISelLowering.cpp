@@ -1562,6 +1562,8 @@ void X86TargetLowering::resetOperationActions() {
   setOperationAction(ISD::MULHU, MVT::v32i1, Custom);
   if (Subtarget->is64Bit())
 	setOperationAction(ISD::MULHU, MVT::v64i1, Custom);
+  if (Subtarget->hasSSE2())
+    setOperationAction(ISD::MUL, MVT::v16i8, Custom);
 
   for (unsigned i = 0; i != array_lengthof(ParabixVTs); ++i) {
     // v64i1 is only added and lowered for 64bit subtarget
@@ -14515,6 +14517,8 @@ SDValue X86TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
   // TODO: Combine these logic together.
   // SETCC would always return i1 vector, but it may not be parabix op
   if (Op.getOpcode() != ISD::SETCC && Op.getValueType().isParabixVector())
+    return LowerParabixOperation(Op, DAG);
+  if (Op.getOpcode() == ISD::MUL && Op.getSimpleValueType() == MVT::v16i8)
     return LowerParabixOperation(Op, DAG);
   if (Op.getOpcode() == ISD::STORE &&
       Op.getOperand(1).getValueType().isParabixVector())

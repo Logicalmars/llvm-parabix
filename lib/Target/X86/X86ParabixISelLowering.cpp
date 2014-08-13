@@ -167,6 +167,8 @@ static void resetOperations()
   addOpKindAction(ISD::ADD, MVT::v32i4, InPlacePromote);
   addOpKindAction(ISD::SUB, MVT::v32i4, InPlacePromote);
   addOpKindAction(ISD::MUL, MVT::v32i4, InPlacePromote);
+
+  addOpKindAction(ISD::MUL, MVT::v16i8, InPlacePromote);
 }
 
 static SDValue getFullRegister(SDValue Op, SelectionDAG &DAG) {
@@ -203,13 +205,17 @@ static SDValue lowerWithOpAction(SDValue Op, SelectionDAG &DAG) {
   case InPlacePromote:
     MVT DoubleVT = PromoteTypeDouble(VT);
     SDValue Himask = b.HiMask(RegisterWidth, FieldWidth * 2);
-    SDValue R = b.IFH1(Himask,
-                       /* high bits */
-                       b.DoOp(DoubleVT,
-                              b.AND(getFullRegister(Op0, DAG), Himask),
-                              b.AND(getFullRegister(Op1, DAG), Himask)),
-                       /* low bits */
-                       b.DoOp(DoubleVT, Op0, Op1));
+    SDValue HiBits = b.DoOp(DoubleVT,
+                            b.AND(getFullRegister(Op0, DAG), Himask),
+                            b.AND(getFullRegister(Op1, DAG), Himask));
+    if (Op.getOpcode() == ISD::MUL) {
+      //MUL is a little different, needs to shift right high bits before calc
+      HiBits = b.SHL(FieldWidth, b.DoOp(DoubleVT,
+                                        b.SRL(FieldWidth, b.BITCAST(Op0, DoubleVT)),
+                                        b.SRL(FieldWidth, b.BITCAST(Op1, DoubleVT))));
+    }
+
+    SDValue R = b.IFH1(Himask, HiBits, b.DoOp(DoubleVT, Op0, Op1));
     dbgs() << "lowering into: \n";
     R.dumpr();
     return b.BITCAST(R, VT);

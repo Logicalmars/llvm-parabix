@@ -27,3 +27,24 @@ entry:
   store <32 x i4> %e, <32 x i4>* %P
   ret void
 }
+
+define <16 x i8> @test_mult_8(<16 x i8> %a, <16 x i8> %b) {
+entry:
+  ;CHECK-LABEL: test_mult_8
+
+  %c = mul <16 x i8> %a, %b
+  ret <16 x i8> %c
+  ;CHECK: pmullw
+  ;CHECK: psrlw
+  ;CHECK: psllw
+}
+
+define <32 x i4> @test_mult_4(<32 x i4> %a, <32 x i4> %b) {
+entry:
+  ;CHECK-LABEL: test_mult_4
+
+  %c = mul <32 x i4> %a, %b
+  ret <32 x i4> %c
+  ;CHECK: pmullw
+  ;CHECK: pmullw
+}

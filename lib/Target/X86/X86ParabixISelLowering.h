@@ -179,8 +179,32 @@ namespace llvm {
       return SHL(A, BUILD_VECTOR(VT, Pool));
     }
 
+    SDValue SHL(int sh, SDValue A) {
+      MVT VT = A.getSimpleValueType();
+      int NumElts = VT.getVectorNumElements();
+
+      SmallVector<SDValue, 16> Pool;
+      SDValue Cst = Constant(sh, VT.getScalarType());
+      for (int i = 0; i < NumElts; i++)
+        Pool.push_back(Cst);
+
+      return SHL(A, BUILD_VECTOR(VT, Pool));
+    }
+
     template <int sh>
     SDValue SRL(SDValue A) {
+      MVT VT = A.getSimpleValueType();
+      int NumElts = VT.getVectorNumElements();
+
+      SmallVector<SDValue, 16> Pool;
+      SDValue Cst = Constant(sh, VT.getScalarType());
+      for (int i = 0; i < NumElts; i++)
+        Pool.push_back(Cst);
+
+      return SRL(A, BUILD_VECTOR(VT, Pool));
+    }
+
+    SDValue SRL(int sh, SDValue A) {
       MVT VT = A.getSimpleValueType();
       int NumElts = VT.getVectorNumElements();
 
