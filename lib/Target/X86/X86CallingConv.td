@@ -308,7 +308,7 @@ def CC_X86_Win64_C : CallingConv<[
   CCIfNest<CCAssignToReg<[R10]>>,
 
   // 128 bit vectors are passed by pointer
-  CCIfType<[v16i8, v8i16, v4i32, v2i64, v4f32, v2f64], CCPassIndirect<i64>>,
+  CCIfType<[v16i8, v8i16, v4i32, v2i64, v32i4, v64i2, v4f32, v2f64], CCPassIndirect<i64>>,
 
 
   // 256 bit vectors are passed by pointer
@@ -334,7 +334,7 @@ def CC_X86_Win64_C : CallingConv<[
                                           [XMM0, XMM1, XMM2, XMM3]>>,
 
   // The first 4 FP/Vector arguments are passed in XMM registers.
-  CCIfType<[f32, f64, v16i8, v8i16, v4i32, v2i64, v4f32, v2f64],
+  CCIfType<[f32, f64, v32i4, v64i2, v16i8, v8i16, v4i32, v2i64, v4f32, v2f64],
            CCAssignToRegWithShadow<[XMM0, XMM1, XMM2, XMM3],
                                    [RCX , RDX , R8  , R9  ]>>,
 
@@ -359,7 +359,7 @@ def CC_X86_64_GHC : CallingConv<[
             CCAssignToReg<[R13, RBP, R12, RBX, R14, RSI, RDI, R8, R9, R15]>>,
 
   // Pass in STG registers: F1, F2, F3, F4, D1, D2
-  CCIfType<[f32, f64, v16i8, v8i16, v4i32, v2i64, v4f32, v2f64],
+  CCIfType<[f32, f64, v64i2, v32i4, v16i8, v8i16, v4i32, v2i64, v4f32, v2f64],
             CCIfSubtarget<"hasSSE1()",
             CCAssignToReg<[XMM1, XMM2, XMM3, XMM4, XMM5, XMM6]>>>
 ]>;

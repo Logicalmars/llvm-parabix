@@ -210,6 +210,8 @@ X86TargetLowering::X86TargetLowering(X86TargetMachine &TM)
   resetOperationActions();
 }
 
+extern MVT getFullRegisterType(MVT VT);
+
 void X86TargetLowering::resetOperationActions() {
   const TargetMachine &TM = getTargetMachine();
   static bool FirstTimeThrough = true;
@@ -1579,13 +1581,17 @@ void X86TargetLowering::resetOperationActions() {
     setOperationAction(ISD::SHL, ParabixVTs[i], Custom);
     setOperationAction(ISD::SRL, ParabixVTs[i], Custom);
     setOperationAction(ISD::SRA, ParabixVTs[i], Custom);
-    setOperationAction(ISD::LOAD,               ParabixVTs[i], Custom);
-    setOperationAction(ISD::STORE,              ParabixVTs[i], Custom);
     setOperationAction(ISD::SETCC,              ParabixVTs[i], Custom);
     setOperationAction(ISD::BUILD_VECTOR,       ParabixVTs[i], Custom);
     setOperationAction(ISD::SCALAR_TO_VECTOR,   ParabixVTs[i], Custom);
     setOperationAction(ISD::EXTRACT_VECTOR_ELT, ParabixVTs[i], Custom);
     setOperationAction(ISD::INSERT_VECTOR_ELT,  ParabixVTs[i], Custom);
+
+    //Better way to lower LOAD/STORE
+    setOperationAction(ISD::STORE, ParabixVTs[i], Promote);
+    AddPromotedToType (ISD::STORE, ParabixVTs[i], getFullRegisterType(ParabixVTs[i]));
+    setOperationAction(ISD::LOAD,  ParabixVTs[i], Promote);
+    AddPromotedToType (ISD::LOAD,  ParabixVTs[i], getFullRegisterType(ParabixVTs[i]));
   }
 
   // We have target-specific dag combine patterns for the following nodes:
@@ -14520,9 +14526,6 @@ SDValue X86TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
     return LowerParabixOperation(Op, DAG);
   if (Op.getOpcode() == ISD::MUL && Op.getSimpleValueType() == MVT::v16i8)
     return LowerParabixOperation(Op, DAG);
-  if (Op.getOpcode() == ISD::STORE &&
-      Op.getOperand(1).getValueType().isParabixVector())
-    return LowerParabixOperation(Op, DAG);
   if (Op.getOpcode() == ISD::EXTRACT_VECTOR_ELT &&
       Op.getOperand(0).getValueType().isParabixVector())
     return LowerParabixOperation(Op, DAG);
@@ -14542,6 +14545,12 @@ SDValue X86TargetLowering::LowerOperation(SDValue Op, SelectionDAG &DAG) const {
       Op.getSimpleValueType() == MVT::v32i8 &&
       Subtarget->hasAVX2()) {
     return LowerParabixOperation(Op, DAG);
+  }
+
+  if (Op.getOpcode() == ISD::STORE)
+  {
+    dbgs() << "Store that are not redirected: \n";
+    Op.dumpr();
   }
 
   switch (Op.getOpcode()) {

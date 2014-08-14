@@ -79,40 +79,6 @@ MVT getFullRegisterType(MVT VT) {
   return castType;
 }
 
-//Parabix LowerSTORE
-static SDValue PXLowerSTORE(SDValue Op, SelectionDAG &DAG) {
-  MVT ValVT = Op.getOperand(1).getSimpleValueType();
-  MVT CastType = getFullRegisterType(ValVT);
-
-  SDNode *Node = Op.getNode();
-  SDLoc dl(Node);
-  StoreSDNode *ST = cast<StoreSDNode>(Node);
-  SDValue Tmp1 = ST->getChain();
-  SDValue Tmp2 = ST->getBasePtr();
-  SDValue Tmp3 = ST->getValue();
-
-  SDValue TransTmp3 = DAG.getNode(ISD::BITCAST, dl, CastType, Tmp3);
-  return DAG.getStore(Tmp1, dl, TransTmp3, Tmp2, ST->getMemOperand());
-}
-
-static SDValue PXLowerLOAD(SDValue Op, SelectionDAG &DAG) {
-  MVT VT = Op.getSimpleValueType();
-  MVT CastType = getFullRegisterType(VT);
-
-  SDLoc dl(Op);
-  LoadSDNode *LD = cast<LoadSDNode>(Op);
-
-  SDValue Chain = LD->getChain();
-  SDValue BasePtr = LD->getBasePtr();
-  MachineMemOperand *MMO = LD->getMemOperand();
-
-  SDValue NewLD = DAG.getLoad(CastType, dl, Chain, BasePtr, MMO);
-  SDValue Result = DAG.getNode(ISD::BITCAST, dl, VT, NewLD);
-  SDValue Ops[] = { Result, SDValue(NewLD.getNode(), 1) };
-
-  return DAG.getMergeValues(Ops, dl);
-}
-
 typedef std::pair<ISD::NodeType, MVT> CastAndOpKind;
 static std::map<CastAndOpKind, ISD::NodeType> CAOops;
 
@@ -356,6 +322,18 @@ static SDValue PXLowerMUL(SDValue Op, SelectionDAG &DAG) {
   return SDValue();
 }
 
+static SDValue getTruncateOrZeroExtend(SDValue V, SelectionDAG &DAG, MVT ToVT)
+{
+  SDNodeTreeBuilder b(V, &DAG);
+  MVT VT = V.getSimpleValueType();
+  if (VT.bitsLT(ToVT))
+    return b.ZERO_EXTEND(V, ToVT);
+  else if (VT.bitsGT(ToVT))
+    return b.TRUNCATE(V, ToVT);
+
+  return V;
+}
+
 static SDValue PXLowerINSERT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) {
   MVT VT = Op.getSimpleValueType();
   MVT FullVT = getFullRegisterType(VT);
@@ -405,30 +383,34 @@ static SDValue PXLowerINSERT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) {
   }
   else {
     //General strategy here
-    //extract an i32 from the vector and insert N1 into proper location.
-    //then, insert the modified i32 back
+    //extract an i16 from the vector and insert N1 into proper location.
+    //then, insert the modified i16 back
+    //SSE2 don't have extract i32, only have extract i16
     assert(VT.getVectorElementType().bitsLE(MVT::i8) &&
            "general INSERT_VECTOR_ELT only works with FieldWidth <= 8");
 
-    if (N2.getSimpleValueType() != MVT::i32)
-      N2 = b.ZERO_EXTEND(N2, MVT::i32);
+    N2 = getTruncateOrZeroExtend(N2, DAG, MVT::i16);
 
-    int I32VecNumElts = RegisterWidth / 32;
-    MVT I32VecType = MVT::getVectorVT(MVT::i32, I32VecNumElts);
+    int I16VecNumElts = RegisterWidth / 16;
+    MVT I16VecType = MVT::getVectorVT(MVT::i16, I16VecNumElts);
     int lowbitsMask = (1 << FieldWidth) - 1;
 
-    SDValue IdxVec = b.UDIV(N2, b.Constant(NumElts / I32VecNumElts));
-    SDValue IdxInside = b.UREM(N2, b.Constant(NumElts / I32VecNumElts));
+    SDValue IdxVec = b.UDIV(N2, b.Constant(NumElts / I16VecNumElts, MVT::i16));
+    SDValue IdxInside = b.UREM(N2, b.Constant(NumElts / I16VecNumElts, MVT::i16));
 
-    SDValue TransVal = b.BITCAST(N0, I32VecType);
+    SDValue TransVal = b.BITCAST(N0, I16VecType);
     SDValue ExtVal = b.EXTRACT_VECTOR_ELT(TransVal, IdxVec);
+
     SDValue NewElt = b.SHL(b.ZERO_EXTEND(b.AND(N1, b.Constant(lowbitsMask, MVT::i8)),
-                                         MVT::i32),
-                           b.MUL(IdxInside, b.Constant(FieldWidth)));
-    SDValue Mask   = b.SHL(b.Constant(lowbitsMask), b.MUL(IdxInside, b.Constant(FieldWidth)));
+                                         MVT::i16),
+                           b.MUL(IdxInside, b.Constant(FieldWidth, MVT::i16)));
+    SDValue Mask   = b.SHL(b.Constant(lowbitsMask, MVT::i16),
+                           b.MUL(IdxInside, b.Constant(FieldWidth, MVT::i16)));
 
     ExtVal = b.OR(b.AND(ExtVal, b.NOT(Mask)), NewElt);
-    return b.BITCAST(b.INSERT_VECTOR_ELT(TransVal, ExtVal, IdxVec), VT);
+
+    return b.BITCAST(b.INSERT_VECTOR_ELT(TransVal, ExtVal,
+                                         b.ZERO_EXTEND(IdxVec, MVT::i32)), VT);
   }
 
   llvm_unreachable("lowering insert_vector_elt for unsupported type");
@@ -456,25 +438,24 @@ static SDValue PXLowerEXTRACT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) {
                        DAG.getNode(ISD::AND, dl, FullVT, ShiftV, DAG.getConstant(1, FullVT)));
   }
   else {
-    //General strategy here, extract i32 from the vector and then do shifting
+    //General strategy here, extract i16 from the vector and then do shifting
     //and truncate.
     assert(VecVT.getVectorElementType().bitsLE(MVT::i8) &&
            "general EXTRACT_VECTOR_ELT only works with FieldWidth <= 8");
 
-    if (Idx.getSimpleValueType() != MVT::i32)
-      Idx = b.ZERO_EXTEND(Idx, MVT::i32);
+    Idx = getTruncateOrZeroExtend(Idx, DAG, MVT::i16);
 
-    int I32VecNumElts = RegisterWidth / 32;
-    MVT I32VecType = MVT::getVectorVT(MVT::i32, I32VecNumElts);
+    int I16VecNumElts = RegisterWidth / 16;
+    MVT I16VecType = MVT::getVectorVT(MVT::i16, I16VecNumElts);
 
-    SDValue IdxVec = b.UDIV(Idx, b.Constant(NumElts / I32VecNumElts));
-    SDValue IdxInside = b.UREM(Idx, b.Constant(NumElts / I32VecNumElts));
+    SDValue IdxVec = b.UDIV(Idx, b.Constant(NumElts / I16VecNumElts, MVT::i16));
+    SDValue IdxInside = b.UREM(Idx, b.Constant(NumElts / I16VecNumElts, MVT::i16));
 
-    SDValue TransVal = b.BITCAST(Vec, I32VecType);
+    SDValue TransVal = b.BITCAST(Vec, I16VecType);
     SDValue ExtVal = b.EXTRACT_VECTOR_ELT(TransVal, IdxVec);
 
-    return b.TRUNCATE(b.AND(b.SRL(ExtVal, b.MUL(IdxInside, b.Constant(FieldWidth))),
-                            b.Constant( (1 << FieldWidth) - 1 )),
+    return b.TRUNCATE(b.AND(b.SRL(ExtVal, b.MUL(IdxInside, b.Constant(FieldWidth, MVT::i16))),
+                            b.Constant( (1 << FieldWidth) - 1, MVT::i16)),
                       MVT::i8);
   }
 
@@ -729,8 +710,6 @@ SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) 
 
   switch (Op.getOpcode()) {
   default: llvm_unreachable("[ROOT SWITCH] Should not custom lower this parabix op!");
-  case ISD::STORE:              return PXLowerSTORE(Op, DAG);
-  case ISD::LOAD:               return PXLowerLOAD(Op, DAG);
   case ISD::ADD:                return PXLowerADD(Op, DAG);
   case ISD::SUB:                return PXLowerSUB(Op, DAG);
   case ISD::MUL:                return PXLowerMUL(Op, DAG);
