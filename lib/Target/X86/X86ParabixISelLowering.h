@@ -79,6 +79,17 @@ namespace llvm {
       return BUILD_VECTOR(NumType, Pool);
     }
 
+    SDValue ConstantVector(MVT VT, int ElemVal) {
+      assert(VT.isVector() && "ConstantVector only return vector type");
+
+      SDValue Elem = Constant(ElemVal, VT.getVectorElementType());
+      SmallVector<SDValue, 32> Pool;
+      for (unsigned i = 0; i < VT.getVectorNumElements(); ++i)
+        Pool.push_back(Elem);
+
+      return BUILD_VECTOR(VT, Pool);
+    }
+
     SDValue Undef(EVT VT) {
       return DAG->getUNDEF(VT);
     }

@@ -58,10 +58,33 @@ entry:
   ;CHECK: psllw
 }
 
+define <32 x i4> @test_srli(<32 x i4> %a) {
+entry:
+  ;CHECK-LABEL: test_srli
+  %c = lshr <32 x i4> %a, <i4 2, i4 2, i4 2, i4 2, i4 2, i4 2, i4 2, i4 2, i4 2, i4 2, i4 2, i4 2,i4 2, i4 2, i4 2, i4 2,i4 2, i4 2, i4 2, i4 2,i4 2, i4 2, i4 2, i4 2,i4 2, i4 2, i4 2, i4 2,i4 2, i4 2, i4 2, i4 2>
+
+  ;CHECK: psrld
+  ;CHECK: pand
+  ret <32 x i4> %c
+}
+
 define <32 x i4> @test_shli(<32 x i4> %a) {
 entry:
   ;CHECK-LABEL: test_shli
   %c = shl <32 x i4> %a, <i4 2, i4 2, i4 2, i4 2, i4 2, i4 2, i4 2, i4 2, i4 2, i4 2, i4 2, i4 2,i4 2, i4 2, i4 2, i4 2,i4 2, i4 2, i4 2, i4 2,i4 2, i4 2, i4 2, i4 2,i4 2, i4 2, i4 2, i4 2,i4 2, i4 2, i4 2, i4 2>
 
+  ;CHECK: pslld
+  ;CHECK: pand
   ret <32 x i4> %c
 }
+
+define <16 x i8> @test_shli_8(<16 x i8> %a) {
+entry:
+  ;CHECK-LABEL: test_shli_8
+  %c = shl <16 x i8> %a, <i8 2, i8 2, i8 2, i8 2, i8 2, i8 2, i8 2, i8 2, i8 2, i8 2, i8 2, i8 2, i8 2, i8 2, i8 2, i8 2>
+  ;CHECK: psllw
+  ;CHECK: pand
+
+  ret <16 x i8> %c
+}
+

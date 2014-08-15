@@ -953,6 +953,73 @@ static SDValue PXPerformVECTOR_SHUFFLECombine(SDNode *N, SelectionDAG &DAG,
   return SDValue();
 }
 
+static bool isImmediateShiftingMask(SDValue Mask, int &imm) {
+  if (Mask.getOpcode() != ISD::BUILD_VECTOR)
+    return false;
+
+  bool FirstImmediate = true;
+  uint64_t ImmNumber;
+
+  for (unsigned i = 0, e = Mask.getNumOperands(); i != e; ++i) {
+    SDValue Op = Mask.getOperand(i);
+    if (Op.getOpcode() == ISD::UNDEF)
+      continue;
+    if (!isa<ConstantSDNode>(Op))
+      return false;
+
+    if (FirstImmediate) {
+      FirstImmediate = false;
+      ImmNumber = cast<ConstantSDNode>(Op)->getZExtValue();
+    }
+    else if (cast<ConstantSDNode>(Op)->getZExtValue() != ImmNumber) {
+      return false;
+    }
+  }
+
+  imm = (int) ImmNumber;
+  return true;
+}
+
+static SDValue PXPerformShiftCombine(SDNode *N, SelectionDAG &DAG,
+                                     TargetLowering::DAGCombinerInfo &DCI,
+                                     const X86Subtarget *Subtarget) {
+  MVT VT = N->getSimpleValueType(0);
+  SDLoc dl(N);
+  SDValue V1 = N->getOperand(0);
+  SDValue V2 = N->getOperand(1);
+  SDNodeTreeBuilder b(&DAG, dl);
+
+  assert((N->getOpcode() == ISD::SHL || N->getOpcode() == ISD::SRL ||
+          N->getOpcode() == ISD::SRA) && "Only lowering shift");
+
+  int imm;
+
+  //Optimize immediate shiftings.
+  if (Subtarget->hasSSE2() && VT == MVT::v32i4 && isImmediateShiftingMask(V2, imm)) {
+
+    MVT I32VecType = MVT::v4i32;
+
+    if (N->getOpcode() == ISD::SHL) {
+      dbgs() << "Parabix combining: ";
+      N->dump();
+
+      SDValue R = b.AND(b.SHL(imm, b.BITCAST(V1, I32VecType)),
+                        b.BITCAST(b.ConstantVector(MVT::v32i4, (15 << imm) & 15), I32VecType));
+      return b.BITCAST(R, VT);
+    }
+    else if (N->getOpcode() == ISD::SRL) {
+      dbgs() << "Parabix combining: ";
+      N->dump();
+
+      SDValue R = b.AND(b.SRL(imm, b.BITCAST(V1, I32VecType)),
+                        b.BITCAST(b.ConstantVector(MVT::v32i4, 15 >> imm), I32VecType));
+      return b.BITCAST(R, VT);
+    }
+  }
+
+  return SDValue();
+}
+
 SDValue X86TargetLowering::PerformParabixDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const
 {
   //For now, only combine simple value type.
@@ -963,6 +1030,8 @@ SDValue X86TargetLowering::PerformParabixDAGCombine(SDNode *N, DAGCombinerInfo &
   default: break;
   case ISD::VSELECT:            return PXPerformVSELECTCombine(N, DAG, DCI, Subtarget);
   case ISD::VECTOR_SHUFFLE:     return PXPerformVECTOR_SHUFFLECombine(N, DAG, DCI, Subtarget);
+  case ISD::SHL:
+  case ISD::SRL:                return PXPerformShiftCombine(N, DAG, DCI, Subtarget);
   }
 
   return SDValue();
