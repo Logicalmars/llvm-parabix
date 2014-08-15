@@ -48,3 +48,20 @@ entry:
   ;CHECK: pmullw
   ;CHECK: pmullw
 }
+
+define <32 x i4> @test_shl(<32 x i4> %a, <32 x i4> %b) {
+entry:
+  ;CHECK-LABEL: test_shl
+  %c = shl <32 x i4> %a, %b
+  ret <32 x i4> %c
+  ;CHECK: psllw
+  ;CHECK: psllw
+}
+
+define <32 x i4> @test_shli(<32 x i4> %a) {
+entry:
+  ;CHECK-LABEL: test_shli
+  %c = shl <32 x i4> %a, <i4 2, i4 2, i4 2, i4 2, i4 2, i4 2, i4 2, i4 2, i4 2, i4 2, i4 2, i4 2,i4 2, i4 2, i4 2, i4 2,i4 2, i4 2, i4 2, i4 2,i4 2, i4 2, i4 2, i4 2,i4 2, i4 2, i4 2, i4 2,i4 2, i4 2, i4 2, i4 2>
+
+  ret <32 x i4> %c
+}

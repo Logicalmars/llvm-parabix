@@ -133,6 +133,9 @@ static void resetOperations()
   //A custom lowering for v32i4 add is implmented. So ADD is not here.
   addOpKindAction(ISD::SUB, MVT::v32i4, InPlacePromote);
   addOpKindAction(ISD::MUL, MVT::v32i4, InPlacePromote);
+  addOpKindAction(ISD::SHL, MVT::v32i4, InPlacePromote);
+  addOpKindAction(ISD::SRL, MVT::v32i4, InPlacePromote);
+  addOpKindAction(ISD::SRA, MVT::v32i4, InPlacePromote);
   addOpKindAction(ISD::SETCC, MVT::v32i4, InPlacePromote);
 
   addOpKindAction(ISD::MUL, MVT::v16i8, InPlacePromote);
@@ -172,26 +175,51 @@ static SDValue lowerWithOpAction(SDValue Op, SelectionDAG &DAG) {
   case InPlacePromote:
     MVT DoubleVT = PromoteTypeDouble(VT);
     SDValue Himask = b.HiMask(RegisterWidth, FieldWidth * 2);
-    SDValue HiBits = b.DoOp(DoubleVT,
-                            b.AND(getFullRegister(Op0, DAG), Himask),
-                            b.AND(getFullRegister(Op1, DAG), Himask));
+    SDValue Lowmask = b.NOT(Himask);
+    SDValue HiBits, LowBits;
+
+    Op0 = getFullRegister(Op0, DAG);
+    Op1 = getFullRegister(Op1, DAG);
+
     if (Op.getOpcode() == ISD::MUL) {
       //MUL is a little different, needs to shift right high bits before calc
       HiBits = b.SHL(FieldWidth, b.DoOp(DoubleVT,
                                         b.SRL(FieldWidth, b.BITCAST(Op0, DoubleVT)),
                                         b.SRL(FieldWidth, b.BITCAST(Op1, DoubleVT))));
+    } else if (Op.getOpcode() == ISD::SHL) {
+      // shift left
+      HiBits = b.DoOp(DoubleVT, b.AND(Op0, Himask),
+                      b.SRL(FieldWidth, b.BITCAST(Op1, DoubleVT)));
+    } else if (Op.getOpcode() == ISD::SRL || Op.getOpcode() == ISD::SRA) {
+      // shift right, logic or arithmetic are the same
+      HiBits = b.DoOp(DoubleVT,
+                      Op0, b.SRL(FieldWidth, b.BITCAST(Op1, DoubleVT)));
+    } else {
+      HiBits = b.DoOp(DoubleVT, b.AND(Op0, Himask), b.AND(Op1, Himask));
     }
-    SDValue LowBits = b.DoOp(DoubleVT, Op0, Op1);
+
     if (Op.getOpcode() == ISD::SETCC) {
       //SETCC needs to shift the lowbits left, to properly set the sign bit.
       LowBits = b.DoOp(DoubleVT,
                        b.SHL(FieldWidth, b.BITCAST(Op0, DoubleVT)),
                        b.SHL(FieldWidth, b.BITCAST(Op1, DoubleVT)));
+    } else if (Op.getOpcode() == ISD::SHL) {
+      //shift left
+      LowBits = b.DoOp(DoubleVT, Op0, b.AND(Op1, Lowmask));
+    } else if (Op.getOpcode() == ISD::SRL) {
+      //shift right logic
+      LowBits = b.DoOp(DoubleVT, b.AND(Op0, Lowmask), b.AND(Op1, Lowmask));
+    } else if (Op.getOpcode() == ISD::SRA) {
+      //shift right arithmetic. Need to shift left low half to high half to set sign bit
+      LowBits = b.SRL(FieldWidth,
+                      b.DoOp(DoubleVT, b.SHL(FieldWidth, b.BITCAST(Op0, DoubleVT)),
+                             b.AND(Op1, Lowmask)));
+
+    } else {
+      LowBits = b.DoOp(DoubleVT, Op0, Op1);
     }
 
     SDValue R = b.IFH1(Himask, HiBits, LowBits);
-    dbgs() << "lowering into: \n";
-    R.dumpr();
     return b.BITCAST(R, VT);
   }
 
