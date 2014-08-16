@@ -240,7 +240,8 @@ namespace llvm {
     /// Parabix helper functions here
     bool isParabixVector() const {
       return (SimpleTy == MVT::v32i1 || SimpleTy == MVT::v64i1 ||
-              SimpleTy == MVT::v64i2 || SimpleTy == MVT::v32i4);
+              SimpleTy == MVT::v64i2 || SimpleTy == MVT::v32i4 ||
+              SimpleTy == MVT::v128i1);
     }
 
     bool isParabixValue() const {

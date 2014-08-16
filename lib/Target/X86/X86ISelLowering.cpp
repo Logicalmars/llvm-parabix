@@ -300,7 +300,8 @@ void X86TargetLowering::resetOperationActions() {
   }
 
   // Parabix register class
-  static const MVT ParabixVTs[] = { MVT::v32i1, MVT::v64i1, MVT::v64i2, MVT::v32i4 };
+  static const MVT ParabixVTs[] = { MVT::v32i1, MVT::v64i1, MVT::v64i2, MVT::v32i4,
+                                    MVT::v128i1 };
   for (unsigned i = 0; i != array_lengthof(ParabixVTs); ++i) {
     if (ParabixVTs[i].is32BitVector()) {
       addRegisterClass(ParabixVTs[i], &X86::GR32XRegClass);
@@ -1564,8 +1565,10 @@ void X86TargetLowering::resetOperationActions() {
   setOperationAction(ISD::MULHU, MVT::v32i1, Custom);
   if (Subtarget->is64Bit())
 	setOperationAction(ISD::MULHU, MVT::v64i1, Custom);
-  if (Subtarget->hasSSE2())
+  if (Subtarget->hasSSE2()) {
     setOperationAction(ISD::MUL, MVT::v16i8, Custom);
+    setOperationAction(ISD::MULHU, MVT::v128i1, Custom);
+  }
 
   for (unsigned i = 0; i != array_lengthof(ParabixVTs); ++i) {
     // v64i1 is only added and lowered for 64bit subtarget
@@ -2315,7 +2318,7 @@ X86TargetLowering::LowerFormalArguments(SDValue Chain,
         RC = &X86::VR512RegClass;
       else if (RegVT.is256BitVector())
         RC = &X86::VR256RegClass;
-      else if (RegVT == MVT::v64i2 || RegVT == MVT::v32i4)
+      else if (RegVT.isParabixVector() && RegVT.is128BitVector())
         RC = &X86::VR128PXRegClass;
       else if (RegVT.is128BitVector())
         RC = &X86::VR128RegClass;
