@@ -19632,6 +19632,13 @@ static SDValue PerformLOADCombine(SDNode *N, SelectionDAG &DAG,
       }
     }
 
+    // if Memsz is smaller than i8, no bigger interger type would devides the total
+    // loaded size. e.g. MemVT = v4i1, RegVT= v4i32, Numloads will be zero.
+    if (MemSz % SclrLoadTy.getSizeInBits() != 0) {
+      //Can't find such a scalar type
+      return SDValue();
+    }
+
     // On 32bit systems, we can't save 64bit integers. Try bitcasting to F64.
     if (TLI.isTypeLegal(MVT::f64) && SclrLoadTy.getSizeInBits() < 64 &&
         (64 <= MemSz))
