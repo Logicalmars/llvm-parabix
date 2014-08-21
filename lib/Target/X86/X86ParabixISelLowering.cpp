@@ -370,7 +370,7 @@ static SDValue getTruncateOrZeroExtend(SDValue V, SelectionDAG &DAG, MVT ToVT)
   return V;
 }
 
-static SDValue PXLowerINSERT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) {
+static SDValue PXLowerINSERT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG, const X86Subtarget* Subtarget) {
   MVT VT = Op.getSimpleValueType();
   MVT FullVT = getFullRegisterType(VT);
   SDNodeTreeBuilder b(Op, &DAG);
@@ -444,8 +444,12 @@ static SDValue PXLowerINSERT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) {
 
     ExtVal = b.OR(b.AND(ExtVal, b.NOT(Mask)), NewElt);
 
-    return b.BITCAST(b.INSERT_VECTOR_ELT(TransVal, ExtVal,
-                                         b.ZERO_EXTEND(IdxVec, MVT::i32)), VT);
+    // idx for insert_vector_elt should match the subtarget
+    MVT IdxValueType = MVT::i32;
+    if (Subtarget->is64Bit())
+        IdxValueType = MVT::i64;
+
+    return b.BITCAST(b.INSERT_VECTOR_ELT(TransVal, ExtVal, b.ZERO_EXTEND(IdxVec, IdxValueType)), VT);
   }
 
   llvm_unreachable("lowering insert_vector_elt for unsupported type");
@@ -754,7 +758,7 @@ SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) 
   case ISD::SHL:
   case ISD::SRA:
   case ISD::SRL:                return PXLowerShift(Op, DAG);
-  case ISD::INSERT_VECTOR_ELT:  return PXLowerINSERT_VECTOR_ELT(Op, DAG);
+  case ISD::INSERT_VECTOR_ELT:  return PXLowerINSERT_VECTOR_ELT(Op, DAG, Subtarget);
   case ISD::EXTRACT_VECTOR_ELT: return PXLowerEXTRACT_VECTOR_ELT(Op, DAG);
   case ISD::SCALAR_TO_VECTOR:   return PXLowerSCALAR_TO_VECTOR(Op, DAG);
   case ISD::SETCC:              return PXLowerSETCC(Op, DAG);
