@@ -538,8 +538,6 @@ static SDValue PXLowerSCALAR_TO_VECTOR(SDValue Op, SelectionDAG &DAG) {
 
 //get zero vector for parabix
 static SDValue getPXZeroVector(EVT VT, SDNodeTreeBuilder b) {
-  assert(VT.isParabixVector() && "This function only lower parabix vectors");
-
   SDValue Vec;
   if (VT.isSimple() && VT.getSimpleVT().is32BitVector()) {
     // Careful here, don't use TargetConstant until you are sure.
@@ -548,6 +546,8 @@ static SDValue getPXZeroVector(EVT VT, SDNodeTreeBuilder b) {
     Vec = b.Constant(0, MVT::i64);
   } else if (VT.isSimple() && VT.getSimpleVT().is128BitVector()) {
     Vec = b.ConstantVector(MVT::v4i32, 0);
+  } else if (VT.isSimple() && VT.getSimpleVT().is256BitVector()) {
+    Vec = b.ConstantVector(MVT::v8i32, 0);
   } else
     llvm_unreachable("Unexpected vector type");
 
@@ -555,8 +555,6 @@ static SDValue getPXZeroVector(EVT VT, SDNodeTreeBuilder b) {
 }
 
 static SDValue getPXOnesVector(EVT VT, SDNodeTreeBuilder b) {
-  assert(VT.isParabixVector() && "This function only lower parabix vectors");
-
   SDValue Vec;
   if (VT.isSimple() && VT.getSimpleVT().is32BitVector()) {
     // Careful here, don't use TargetConstant until you are sure.
@@ -565,6 +563,8 @@ static SDValue getPXOnesVector(EVT VT, SDNodeTreeBuilder b) {
     Vec = b.Constant(-1, MVT::i64);
   } else if (VT.isSimple() && VT.getSimpleVT().is128BitVector()) {
     Vec = b.ConstantVector(MVT::v4i32, -1);
+  } else if (VT.isSimple() && VT.getSimpleVT().is256BitVector()) {
+    Vec = b.ConstantVector(MVT::v8i32, -1);
   } else
     llvm_unreachable("Unexpected vector type");
 
@@ -1033,6 +1033,59 @@ static SDValue PXPerformShiftCombine(SDNode *N, SelectionDAG &DAG,
   return SDValue();
 }
 
+static SDValue PXPerformUADDO(SDNode *N, SelectionDAG &DAG,
+                                     TargetLowering::DAGCombinerInfo &DCI,
+                                     const X86Subtarget *Subtarget) {
+  MVT VT = N->getSimpleValueType(0);
+  SDLoc dl(N);
+  SDValue V1 = N->getOperand(0);
+  SDValue V2 = N->getOperand(1);
+  SDNodeTreeBuilder b(&DAG, dl);
+
+  if (DCI.isBeforeLegalize() && Subtarget->hasSSE2() && VT == MVT::i128) {
+    dbgs() << "Parabix combining: ";
+    N->dump();
+
+    //general logic for uadd.with.overflow.iXXX
+    int RegisterWidth = VT.getSizeInBits();
+    int f = RegisterWidth / 64;
+    MVT VXi64Ty = MVT::getVectorVT(MVT::i64, f);
+    MVT MaskTy = MVT::getIntegerVT(f);
+    MVT MaskVecTy = MVT::getVectorVT(MVT::i1, f);
+
+    SDValue X = b.BITCAST(V1, VXi64Ty);
+    SDValue Y = b.BITCAST(V2, VXi64Ty);
+    SDValue R = b.ADD(X, Y);
+
+    SDValue Zero = getPXZeroVector(VXi64Ty, b);
+    SDValue Ones = getPXOnesVector(VXi64Ty, b);
+    //x = hsimd<64>::mask(X), x, y, r are all i32 type
+    SDValue x = b.ZERO_EXTEND(b.BITCAST(b.SETCC(X, Zero, ISD::SETLT), MaskTy), MVT::i32);
+    SDValue y = b.ZERO_EXTEND(b.BITCAST(b.SETCC(Y, Zero, ISD::SETLT), MaskTy), MVT::i32);
+    SDValue r = b.ZERO_EXTEND(b.BITCAST(b.SETCC(R, Zero, ISD::SETLT), MaskTy), MVT::i32);
+
+    SDValue carry = b.OR(b.AND(x, y), b.AND(b.OR(x, y), b.NOT(r)));
+    SDValue bubble = b.ZERO_EXTEND(b.BITCAST(b.SETCC(R, Ones, ISD::SETEQ), MaskTy), MVT::i32);
+
+    SDValue increments = b.MatchStar(b.SHL(carry, b.Constant(1, MVT::i32)), bubble);
+    SDValue carry_out = b.TRUNCATE(b.SRL(increments, b.Constant(f, MVT::i32)), MVT::i1);
+
+    SDValue spread = b.ZERO_EXTEND(b.BITCAST(b.TRUNCATE(increments, MaskTy), MaskVecTy),
+                                   VXi64Ty);
+    SDValue sum = b.BITCAST(b.ADD(R, spread), VT);
+
+    SDValue Pool[] = {sum, carry_out};
+    SDValue Ret = DAG.getMergeValues(Pool, dl);
+
+    dbgs() << "Combined into: \n";
+    Ret.dumpr();
+
+    return Ret;
+  }
+
+  return SDValue();
+}
+
 SDValue X86TargetLowering::PerformParabixDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const
 {
   //For now, only combine simple value type.
@@ -1045,6 +1098,7 @@ SDValue X86TargetLowering::PerformParabixDAGCombine(SDNode *N, DAGCombinerInfo &
   case ISD::VECTOR_SHUFFLE:     return PXPerformVECTOR_SHUFFLECombine(N, DAG, DCI, Subtarget);
   case ISD::SHL:
   case ISD::SRL:                return PXPerformShiftCombine(N, DAG, DCI, Subtarget);
+  case ISD::UADDO:              return PXPerformUADDO(N, DAG, DCI, Subtarget);
   }
 
   return SDValue();

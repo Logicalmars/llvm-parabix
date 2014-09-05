@@ -1596,6 +1596,10 @@ void X86TargetLowering::resetOperationActions() {
     setOperationAction(ISD::LOAD,  ParabixVTs[i], Promote);
     AddPromotedToType (ISD::LOAD,  ParabixVTs[i], getFullRegisterType(ParabixVTs[i]));
   }
+  // Parabix: custom lowering ISD::UADDO for long stream addition.
+  // ref: LegalizeDAG.cpp 3693. UADDO is expanded to ADD and SetCC
+  // ref: this file, lowerXALUO, UADDO to X86ISD::ADD and SetCC X86::Cond_B
+  setTargetDAGCombine(ISD::UADDO);
 
   // We have target-specific dag combine patterns for the following nodes:
   setTargetDAGCombine(ISD::VECTOR_SHUFFLE);

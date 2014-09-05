@@ -149,6 +149,11 @@ namespace llvm {
       return DAG->getNode(ISD::SELECT, dl, VT, Cond, TrueVal, FalseVal);
     }
 
+    SDValue ADD(SDValue A, SDValue B) {
+      MVT VT = A.getSimpleValueType();
+      return DAG->getNode(ISD::ADD, dl, VT, A, B);
+    }
+
     SDValue AND(SDValue A, SDValue B) {
       MVT VT = A.getSimpleValueType();
       return DAG->getNode(ISD::AND, dl, VT, A, B);
@@ -246,6 +251,14 @@ namespace llvm {
       return SRL(A, BUILD_VECTOR(VT, Pool));
     }
 
+    //C can be ISD::SETNE, ISD::SETLT, etc.
+    SDValue SETCC(SDValue A, SDValue B, ISD::CondCode C) {
+      MVT OpVT = A.getSimpleValueType();
+      MVT VT = MVT::getVectorVT(MVT::i1, OpVT.getVectorNumElements());
+
+      return DAG->getNode(ISD::SETCC, dl, VT, A, B, DAG->getCondCode(C));
+    }
+
     //High mask of RegisterWidth bits vectors with different field width.
     //e.g. fieldwidth = 8, mask is 1111000011110000...
     //return <XX x i64>
@@ -309,6 +322,12 @@ namespace llvm {
       // (NewMask & NewOp1) || (~NewMask & NewOp2)
       SDValue R = OR(AND(NewMask, NewOp1), AND(NOT(NewMask), NewOp2));
       return BITCAST(R, VT);
+    }
+
+    SDValue MatchStar(SDValue M, SDValue C) {
+      assert(M.getSimpleValueType().SimpleTy == C.getSimpleValueType().SimpleTy &&
+             "MatchStar operands of different type");
+      return OR(XOR(ADD(AND(M, C), C), C), M);
     }
   };
 }
