@@ -62,7 +62,7 @@
 #include <string>
 using namespace llvm;
 
-#define DEBUG_TYPE "x86-isel"
+#define DEBUG_TYPE "parabix"
 
 //v32i1 => i32, v32i2 => i64, etc
 MVT getFullRegisterType(MVT VT) {
@@ -730,7 +730,7 @@ static SDValue PXLowerSETCC(SDValue Op, SelectionDAG &DAG) {
 ///Entrance for parabix lowering.
 SDValue X86TargetLowering::LowerParabixOperation(SDValue Op, SelectionDAG &DAG) const {
   //NEED: setOperationAction in target specific lowering (X86ISelLowering.cpp)
-  dbgs() << "Parabix Lowering:" << "\n"; Op.dump();
+  DEBUG(dbgs() << "Parabix Lowering:" << "\n"; Op.dump());
 
   //Only resetOperations for the first time.
   static bool FirstTimeThrough = true;
@@ -778,7 +778,7 @@ static SDValue PXPerformVSELECTCombine(SDNode *N, SelectionDAG &DAG,
   if (DCI.isBeforeLegalize()) {
     //v128i1 (select v128i1, v128i1, v128i1) can be combined into logical ops
     if (MaskTy == MVT::v128i1 && VT == MVT::v128i1) {
-      dbgs() << "Combining select v128i1 \n";
+      DEBUG(dbgs() << "Combining select v128i1 \n");
       return b.IFH1(Mask, N->getOperand(0), N->getOperand(1));
    }
   }
@@ -847,8 +847,7 @@ static SDValue PXPerformVECTOR_SHUFFLECombine(SDNode *N, SelectionDAG &DAG,
   //simd<16>::packl
   if (Subtarget->hasSSE2() && VT == MVT::v16i8 && isPackLowMask(SVOp) &&
       V1.getOpcode() != ISD::UNDEF && V2.getOpcode() != ISD::UNDEF) {
-    dbgs() << "Parabix combine: \n";
-    N->dumpr();
+    DEBUG(dbgs() << "Parabix combine: \n"; N->dumpr());
 
     //00000000111111110000000011111111
     SDValue LowMaskInteger = b.Constant(16711935, MVT::i32);
@@ -869,8 +868,7 @@ static SDValue PXPerformVECTOR_SHUFFLECombine(SDNode *N, SelectionDAG &DAG,
   //For simd<16>::packh
   if (Subtarget->hasSSE2() && VT == MVT::v16i8 && isPackHighMask(SVOp) &&
       V1.getOpcode() != ISD::UNDEF && V2.getOpcode() != ISD::UNDEF) {
-    dbgs() << "Parabix combine: \n";
-    N->dumpr();
+    DEBUG(dbgs() << "Parabix combine: \n"; N->dumpr());
 
     SDValue Cst = b.Constant(8, MVT::i16);
     SDValue VPool[] = {Cst, Cst, Cst, Cst, Cst, Cst, Cst, Cst};
@@ -891,8 +889,7 @@ static SDValue PXPerformVECTOR_SHUFFLECombine(SDNode *N, SelectionDAG &DAG,
   if (Subtarget->hasBMI2() && Subtarget->is64Bit() &&
       (isPackLowMask(SVOp) || isPackHighMask(SVOp)) &&
       (VT == MVT::v32i4 || VT == MVT::v64i2 || VT == MVT::v128i1)) {
-    dbgs() << "Parabix combine: \n";
-    N->dumpr();
+    DEBUG(dbgs() << "Parabix combine: \n"; N->dumpr());
 
     std::string Mask;
     if (isPackLowMask(SVOp)) {
@@ -1013,16 +1010,14 @@ static SDValue PXPerformShiftCombine(SDNode *N, SelectionDAG &DAG,
     MVT I32VecType = MVT::v4i32;
 
     if (N->getOpcode() == ISD::SHL) {
-      dbgs() << "Parabix combining: ";
-      N->dump();
+      DEBUG(dbgs() << "Parabix combining: "; N->dump());
 
       SDValue R = b.AND(b.SHL(imm, b.BITCAST(V1, I32VecType)),
                         b.BITCAST(b.ConstantVector(MVT::v32i4, (15 << imm) & 15), I32VecType));
       return b.BITCAST(R, VT);
     }
     else if (N->getOpcode() == ISD::SRL) {
-      dbgs() << "Parabix combining: ";
-      N->dump();
+      DEBUG(dbgs() << "Parabix combining: "; N->dump());
 
       SDValue R = b.AND(b.SRL(imm, b.BITCAST(V1, I32VecType)),
                         b.BITCAST(b.ConstantVector(MVT::v32i4, 15 >> imm), I32VecType));
@@ -1043,8 +1038,7 @@ static SDValue PXPerformUADDO(SDNode *N, SelectionDAG &DAG,
   SDNodeTreeBuilder b(&DAG, dl);
 
   if (DCI.isBeforeLegalize() && Subtarget->hasSSE2() && VT == MVT::i128) {
-    dbgs() << "Parabix combining: ";
-    N->dump();
+    DEBUG(dbgs() << "Parabix combining: "; N->dump());
 
     //general logic for uadd.with.overflow.iXXX
     int RegisterWidth = VT.getSizeInBits();
@@ -1057,12 +1051,30 @@ static SDValue PXPerformUADDO(SDNode *N, SelectionDAG &DAG,
     SDValue Y = b.BITCAST(V2, VXi64Ty);
     SDValue R = b.ADD(X, Y);
 
-    SDValue Zero = getPXZeroVector(VXi64Ty, b);
     SDValue Ones = getPXOnesVector(VXi64Ty, b);
-    //x = hsimd<64>::mask(X), x, y, r are all i32 type
-    SDValue x = b.ZERO_EXTEND(b.BITCAST(b.SETCC(X, Zero, ISD::SETLT), MaskTy), MVT::i32);
-    SDValue y = b.ZERO_EXTEND(b.BITCAST(b.SETCC(Y, Zero, ISD::SETLT), MaskTy), MVT::i32);
-    SDValue r = b.ZERO_EXTEND(b.BITCAST(b.SETCC(R, Zero, ISD::SETLT), MaskTy), MVT::i32);
+
+    //x = hsimd<64>::signmask(X), x, y, r are all i32 type
+    SDValue x, y, r;
+    if (f == 2) {
+      //i128, v2i1 to i2 seems to be problematic
+      x = b.SignMask2x64(X);
+      y = b.SignMask2x64(Y);
+      r = b.SignMask2x64(R);
+    }
+    else if (f == 4) {
+      //i256
+      x = b.SignMask4x64(X);
+      y = b.SignMask4x64(Y);
+      r = b.SignMask4x64(R);
+    }
+    else
+    {
+      //i512, i1024, ..., i4096
+      SDValue Zero = getPXZeroVector(VXi64Ty, b);
+      x = b.ZERO_EXTEND(b.BITCAST(b.SETCC(X, Zero, ISD::SETLT), MaskTy), MVT::i32);
+      y = b.ZERO_EXTEND(b.BITCAST(b.SETCC(Y, Zero, ISD::SETLT), MaskTy), MVT::i32);
+      r = b.ZERO_EXTEND(b.BITCAST(b.SETCC(R, Zero, ISD::SETLT), MaskTy), MVT::i32);
+    }
 
     SDValue carry = b.OR(b.AND(x, y), b.AND(b.OR(x, y), b.NOT(r)));
     SDValue bubble = b.ZERO_EXTEND(b.BITCAST(b.SETCC(R, Ones, ISD::SETEQ), MaskTy), MVT::i32);
@@ -1077,8 +1089,7 @@ static SDValue PXPerformUADDO(SDNode *N, SelectionDAG &DAG,
     SDValue Pool[] = {sum, carry_out};
     SDValue Ret = DAG.getMergeValues(Pool, dl);
 
-    dbgs() << "Combined into: \n";
-    Ret.dumpr();
+    DEBUG(dbgs() << "Combined into: \n"; Ret.dumpr());
 
     return Ret;
   }

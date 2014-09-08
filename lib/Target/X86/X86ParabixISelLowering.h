@@ -293,6 +293,7 @@ namespace llvm {
       return SDValue();
     }
 
+    //X86 specific function
     SDValue PEXT64(SDValue A, SDValue B) {
       assert(A.getSimpleValueType() == MVT::i64 &&
              B.getSimpleValueType() == MVT::i64 &&
@@ -302,6 +303,36 @@ namespace llvm {
                               MVT::i64,
                               DAG->getConstant(Intrinsic::x86_bmi_pext_64, MVT::i32),
                               A,B);
+      return V;
+    }
+
+    //X86 specific function
+    //Collect sign bit of each 64-bit field into i32
+    SDValue SignMask2x64(SDValue A) {
+      assert(A.getSimpleValueType().getSizeInBits() == 128 &&
+             "SignMask get wrong sized type.");
+      if (A.getSimpleValueType() != MVT::v2f64)
+        A = BITCAST(A, MVT::v2f64);
+
+      SDValue V = DAG->getNode(ISD::INTRINSIC_WO_CHAIN, dl,
+                               MVT::i32,
+                               DAG->getConstant(Intrinsic::x86_sse2_movmsk_pd, MVT::i32),
+                               A);
+      return V;
+    }
+
+    //X86 specific function
+    //Collect sign bit of each 64-bit field into i32
+    SDValue SignMask4x64(SDValue A) {
+      assert(A.getSimpleValueType().getSizeInBits() == 256 &&
+             "SignMask get wrong sized type.");
+      if (A.getSimpleValueType() != MVT::v4f64)
+        A = BITCAST(A, MVT::v4f64);
+
+      SDValue V = DAG->getNode(ISD::INTRINSIC_WO_CHAIN, dl,
+                               MVT::i32,
+                               DAG->getConstant(Intrinsic::x86_avx_movmsk_pd_256, MVT::i32),
+                               A);
       return V;
     }
 
