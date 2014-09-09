@@ -1037,7 +1037,8 @@ static SDValue PXPerformUADDO(SDNode *N, SelectionDAG &DAG,
   SDValue V2 = N->getOperand(1);
   SDNodeTreeBuilder b(&DAG, dl);
 
-  if (DCI.isBeforeLegalize() && Subtarget->hasSSE2() && VT == MVT::i128) {
+  if (DCI.isBeforeLegalize() &&
+      ((Subtarget->hasSSE2() && VT == MVT::i128) || (Subtarget->hasAVX() && VT == MVT::i256))) {
     DEBUG(dbgs() << "Parabix combining: "; N->dump());
 
     //general logic for uadd.with.overflow.iXXX
