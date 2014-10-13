@@ -217,6 +217,9 @@ namespace ISD {
     /// These nodes are generated from llvm.[su]add.with.overflow intrinsics.
     SADDO, UADDO,
 
+    // llvm.uadd.with.overflow.carryin intrinsics.
+    UADDE,
+
     /// Same for subtraction.
     SSUBO, USUBO,
 

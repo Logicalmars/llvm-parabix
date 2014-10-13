@@ -5323,6 +5323,15 @@ SelectionDAGBuilder::visitIntrinsicCall(const CallInst &I, unsigned Intrinsic) {
     setValue(&I, DAG.getNode(Op, sdl, VTs, Op1, Op2));
     return nullptr;
   }
+  case Intrinsic::uadd_with_overflow_carryin: {
+    SDValue Op1 = getValue(I.getArgOperand(0));
+    SDValue Op2 = getValue(I.getArgOperand(1));
+    SDValue Op3 = getValue(I.getArgOperand(2));
+
+    SDVTList VTs = DAG.getVTList(Op1.getValueType(), MVT::i1);
+    setValue(&I, DAG.getNode(ISD::UADDE, sdl, VTs, Op1, Op2, Op3));
+    return nullptr;
+  }
   case Intrinsic::prefetch: {
     SDValue Ops[5];
     unsigned rw = cast<ConstantInt>(I.getArgOperand(1))->getZExtValue();

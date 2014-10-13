@@ -434,6 +434,10 @@ def int_uadd_with_overflow : Intrinsic<[llvm_anyint_ty, llvm_i1_ty],
                                        [LLVMMatchType<0>, LLVMMatchType<0>],
                                        [IntrNoMem]>;
 
+def int_uadd_with_overflow_carryin : Intrinsic<[llvm_anyint_ty, llvm_i1_ty],
+                                       [LLVMMatchType<0>, LLVMMatchType<0>, LLVMMatchType<0>],
+                                       [IntrNoMem]>;
+
 def int_ssub_with_overflow : Intrinsic<[llvm_anyint_ty, llvm_i1_ty],
                                        [LLVMMatchType<0>, LLVMMatchType<0>],
                                        [IntrNoMem]>;

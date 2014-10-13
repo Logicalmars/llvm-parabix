@@ -205,6 +205,7 @@ std::string SDNode::getOperationName(const SelectionDAG *G) const {
   case ISD::ADDE:                       return "adde";
   case ISD::SADDO:                      return "saddo";
   case ISD::UADDO:                      return "uaddo";
+  case ISD::UADDE:                      return "uadde";
   case ISD::SSUBO:                      return "ssubo";
   case ISD::USUBO:                      return "usubo";
   case ISD::SMULO:                      return "smulo";
