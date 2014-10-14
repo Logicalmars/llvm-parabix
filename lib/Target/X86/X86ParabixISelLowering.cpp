@@ -1028,6 +1028,68 @@ static SDValue PXPerformShiftCombine(SDNode *N, SelectionDAG &DAG,
   return SDValue();
 }
 
+static SDValue LongStreamAddition(MVT VT, SDValue V1, SDValue V2, SDValue Vcarryin, SDNodeTreeBuilder &b) {
+  //general logic for uadd.with.overflow.iXXX
+  int RegisterWidth = VT.getSizeInBits();
+  int f = RegisterWidth / 64;
+  MVT VXi64Ty = MVT::getVectorVT(MVT::i64, f);
+  MVT MaskTy = MVT::getIntegerVT(f);
+  MVT MaskVecTy = MVT::getVectorVT(MVT::i1, f);
+
+  SDValue X = b.BITCAST(V1, VXi64Ty);
+  SDValue Y = b.BITCAST(V2, VXi64Ty);
+  SDValue R = b.ADD(X, Y);
+
+  SDValue Ones = getPXOnesVector(VXi64Ty, b);
+
+  //x = hsimd<64>::signmask(X), x, y, r are all i32 type
+  SDValue x, y, r, bubble;
+  if (f == 2) {
+    //i128, v2i1 to i2 seems to be problematic
+    x = b.SignMask2x64(X);
+    y = b.SignMask2x64(Y);
+    r = b.SignMask2x64(R);
+    bubble = b.SignMask2x64(b.SIGN_EXTEND(b.SETCC(R, Ones, ISD::SETEQ), VXi64Ty));
+  }
+  else if (f == 4) {
+    //i256
+    x = b.SignMask4x64(X);
+    y = b.SignMask4x64(Y);
+    r = b.SignMask4x64(R);
+    bubble = b.SignMask4x64(b.SIGN_EXTEND(b.SETCC(R, Ones, ISD::SETEQ), VXi64Ty));
+  }
+  else
+  {
+    //i512, i1024, ..., i4096
+    SDValue Zero = getPXZeroVector(VXi64Ty, b);
+    x = b.ZERO_EXTEND(b.BITCAST(b.SETCC(X, Zero, ISD::SETLT), MaskTy), MVT::i32);
+    y = b.ZERO_EXTEND(b.BITCAST(b.SETCC(Y, Zero, ISD::SETLT), MaskTy), MVT::i32);
+    r = b.ZERO_EXTEND(b.BITCAST(b.SETCC(R, Zero, ISD::SETLT), MaskTy), MVT::i32);
+    bubble = b.ZERO_EXTEND(b.BITCAST(b.SETCC(R, Ones, ISD::SETEQ), MaskTy), MVT::i32);
+  }
+
+  SDValue carry = b.OR(b.AND(x, y), b.AND(b.OR(x, y), b.NOT(r)));
+
+  SDValue increments;
+  if (Vcarryin.getNode()) {
+    //carryin is not empty
+    increments = b.MatchStar(b.OR(b.ZERO_EXTEND(Vcarryin, MVT::i32), b.SHL(carry, b.Constant(1, MVT::i32))),
+                             bubble);
+  } else {
+    increments = b.MatchStar(b.SHL(carry, b.Constant(1, MVT::i32)), bubble);
+  }
+
+  SDValue carry_out = b.TRUNCATE(b.SRL(increments, b.Constant(f, MVT::i32)), MVT::i1);
+
+  SDValue spread = b.ZERO_EXTEND(b.BITCAST(b.TRUNCATE(increments, MaskTy), MaskVecTy),
+                                 VXi64Ty);
+  SDValue sum = b.BITCAST(b.ADD(R, spread), VT);
+
+  SDValue Pool[] = {sum, carry_out};
+  return b.MergeValues(Pool);
+}
+
+//Perform combine for @llvm.uadd.with.overflow
 static SDValue PXPerformUADDO(SDNode *N, SelectionDAG &DAG,
                                      TargetLowering::DAGCombinerInfo &DCI,
                                      const X86Subtarget *Subtarget) {
@@ -1041,58 +1103,33 @@ static SDValue PXPerformUADDO(SDNode *N, SelectionDAG &DAG,
       ((Subtarget->hasSSE2() && VT == MVT::i128) || (Subtarget->hasAVX() && VT == MVT::i256))) {
     DEBUG(dbgs() << "Parabix combining: "; N->dump());
 
-    //general logic for uadd.with.overflow.iXXX
-    int RegisterWidth = VT.getSizeInBits();
-    int f = RegisterWidth / 64;
-    MVT VXi64Ty = MVT::getVectorVT(MVT::i64, f);
-    MVT MaskTy = MVT::getIntegerVT(f);
-    MVT MaskVecTy = MVT::getVectorVT(MVT::i1, f);
-
-    SDValue X = b.BITCAST(V1, VXi64Ty);
-    SDValue Y = b.BITCAST(V2, VXi64Ty);
-    SDValue R = b.ADD(X, Y);
-
-    SDValue Ones = getPXOnesVector(VXi64Ty, b);
-
-    //x = hsimd<64>::signmask(X), x, y, r are all i32 type
-    SDValue x, y, r, bubble;
-    if (f == 2) {
-      //i128, v2i1 to i2 seems to be problematic
-      x = b.SignMask2x64(X);
-      y = b.SignMask2x64(Y);
-      r = b.SignMask2x64(R);
-      bubble = b.SignMask2x64(b.SIGN_EXTEND(b.SETCC(R, Ones, ISD::SETEQ), VXi64Ty));
-    }
-    else if (f == 4) {
-      //i256
-      x = b.SignMask4x64(X);
-      y = b.SignMask4x64(Y);
-      r = b.SignMask4x64(R);
-      bubble = b.SignMask4x64(b.SIGN_EXTEND(b.SETCC(R, Ones, ISD::SETEQ), VXi64Ty));
-    }
-    else
-    {
-      //i512, i1024, ..., i4096
-      SDValue Zero = getPXZeroVector(VXi64Ty, b);
-      x = b.ZERO_EXTEND(b.BITCAST(b.SETCC(X, Zero, ISD::SETLT), MaskTy), MVT::i32);
-      y = b.ZERO_EXTEND(b.BITCAST(b.SETCC(Y, Zero, ISD::SETLT), MaskTy), MVT::i32);
-      r = b.ZERO_EXTEND(b.BITCAST(b.SETCC(R, Zero, ISD::SETLT), MaskTy), MVT::i32);
-      bubble = b.ZERO_EXTEND(b.BITCAST(b.SETCC(R, Ones, ISD::SETEQ), MaskTy), MVT::i32);
-    }
-
-    SDValue carry = b.OR(b.AND(x, y), b.AND(b.OR(x, y), b.NOT(r)));
-    SDValue increments = b.MatchStar(b.SHL(carry, b.Constant(1, MVT::i32)), bubble);
-    SDValue carry_out = b.TRUNCATE(b.SRL(increments, b.Constant(f, MVT::i32)), MVT::i1);
-
-    SDValue spread = b.ZERO_EXTEND(b.BITCAST(b.TRUNCATE(increments, MaskTy), MaskVecTy),
-                                   VXi64Ty);
-    SDValue sum = b.BITCAST(b.ADD(R, spread), VT);
-
-    SDValue Pool[] = {sum, carry_out};
-    SDValue Ret = DAG.getMergeValues(Pool, dl);
+    SDValue Ret = LongStreamAddition(VT, V1, V2, SDValue(), b);
 
     DEBUG(dbgs() << "Combined into: \n"; Ret.dumpr());
+    return Ret;
+  }
 
+  return SDValue();
+}
+
+//Perform combine for @llvm.uadd.with.overflow.carryin
+static SDValue PXPerformUADDE(SDNode *N, SelectionDAG &DAG,
+                                     TargetLowering::DAGCombinerInfo &DCI,
+                                     const X86Subtarget *Subtarget) {
+  MVT VT = N->getSimpleValueType(0);
+  SDLoc dl(N);
+  SDValue V1 = N->getOperand(0);
+  SDValue V2 = N->getOperand(1);
+  SDValue Vcarryin = N->getOperand(2);
+  SDNodeTreeBuilder b(&DAG, dl);
+
+  if (DCI.isBeforeLegalize() &&
+      ((Subtarget->hasSSE2() && VT == MVT::i128) || (Subtarget->hasAVX() && VT == MVT::i256))) {
+    DEBUG(dbgs() << "Parabix combining: "; N->dump());
+
+    SDValue Ret = LongStreamAddition(VT, V1, V2, Vcarryin, b);
+
+    DEBUG(dbgs() << "Combined into: \n"; Ret.dumpr());
     return Ret;
   }
 
@@ -1112,6 +1149,7 @@ SDValue X86TargetLowering::PerformParabixDAGCombine(SDNode *N, DAGCombinerInfo &
   case ISD::SHL:
   case ISD::SRL:                return PXPerformShiftCombine(N, DAG, DCI, Subtarget);
   case ISD::UADDO:              return PXPerformUADDO(N, DAG, DCI, Subtarget);
+  case ISD::UADDE:              return PXPerformUADDE(N, DAG, DCI, Subtarget);
   }
 
   return SDValue();

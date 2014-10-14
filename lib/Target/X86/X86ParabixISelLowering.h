@@ -103,6 +103,10 @@ namespace llvm {
       return DAG->getNode(ISD::BUILD_VECTOR, dl, VT, Elements);
     }
 
+    SDValue MergeValues(ArrayRef<SDValue> Values) {
+      return DAG->getMergeValues(Values, dl);
+    }
+
     SDValue EXTRACT_VECTOR_ELT(SDValue Vec, SDValue Idx) {
       MVT VT = Vec.getSimpleValueType();
       MVT EltVT = VT.getVectorElementType();
@@ -360,6 +364,7 @@ namespace llvm {
              "MatchStar operands of different type");
       return OR(XOR(ADD(AND(M, C), C), C), M);
     }
+
   };
 }
 
