@@ -1081,8 +1081,27 @@ static SDValue LongStreamAddition(MVT VT, SDValue V1, SDValue V2, SDValue Vcarry
 
   SDValue carry_out = b.TRUNCATE(b.SRL(increments, b.Constant(f, MVT::i32)), MVT::i1);
 
-  SDValue spread = b.ZERO_EXTEND(b.BITCAST(b.TRUNCATE(increments, MaskTy), MaskVecTy),
-                                 VXi64Ty);
+  SDValue spread;
+
+  if (f == 2) {
+    // <2 x i1> increments to <2 x i64>
+    SDValue spreadV2I16 = b.BITCAST(b.AND(b.MUL(increments, b.Constant(0x8001, MVT::i32)),
+                                          b.Constant(0x10001, MVT::i32)), MVT::v2i16);
+    spread = b.ZERO_EXTEND(spreadV2I16, VXi64Ty);
+  }
+  else if (f == 4) {
+    SDValue increments64 = b.ZERO_EXTEND(increments, MVT::i64);
+    SDValue spreadV4I16 = b.BITCAST(b.AND(b.MUL(increments64,
+                                                b.Constant(0x0000200040008001ull, MVT::i64)),
+                                          b.Constant(0x0001000100010001ull, MVT::i64)),
+                                    MVT::v4i16);
+    spread = b.ZERO_EXTEND(spreadV4I16, VXi64Ty);
+  }
+  else
+  {
+    // calc spread with zero extend: e.g. <4 x i1> to <4 x i64>
+    spread = b.ZERO_EXTEND(b.BITCAST(b.TRUNCATE(increments, MaskTy), MaskVecTy), VXi64Ty);
+  }
   SDValue sum = b.BITCAST(b.ADD(R, spread), VT);
 
   SDValue Pool[] = {sum, carry_out};

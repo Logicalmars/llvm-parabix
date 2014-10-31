@@ -59,7 +59,7 @@ namespace llvm {
       return DAG->getNode(ISD::TRUNCATE, dl, VT, A);
     }
 
-    SDValue Constant(int Num, MVT NumType = MVT::i32) {
+    SDValue Constant(uint64_t Num, MVT NumType = MVT::i32) {
       return DAG->getConstant(Num, NumType);
     }
 
