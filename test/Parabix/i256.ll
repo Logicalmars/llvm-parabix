@@ -28,3 +28,22 @@ define void @sign_ext(i8* %a, i8* %b, i8* %c, i8* %d) {
   ret void
 }
 
+declare {i256, i1} @llvm.uadd.with.overflow.i256(i256 %a, i256 %b)
+
+define <4 x i64> @uadd_with_overflow_i256(<4 x i64> %a, <4 x i64> %b) {
+entry:
+  ;CHECK-LABEL: uadd_with_overflow_i256
+  %aa = bitcast <4 x i64> %a to i256
+  %bb = bitcast <4 x i64> %b to i256
+
+  %res = call {i256, i1} @llvm.uadd.with.overflow.i256(i256 %aa, i256 %bb)
+  %sum = extractvalue {i256, i1} %res, 0
+  %obit = extractvalue {i256, i1} %res, 1
+  %obit1 = zext i1 %obit to i32
+
+  %sum1 = bitcast i256 %sum to <8 x i32>
+  %sum2 = insertelement <8 x i32> %sum1, i32 %obit1, i32 1
+  %sum3 = bitcast <8 x i32> %sum2 to <4 x i64>
+
+  ret <4 x i64> %sum3
+}
