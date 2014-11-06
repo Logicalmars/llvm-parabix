@@ -340,6 +340,46 @@ namespace llvm {
       return V;
     }
 
+    //X86 Specific function
+    //Shift left the i128 or i256 operand A by immInByte * 8 bits.
+    //Return v2i64 for i128
+    SDValue ShiftLeftInByte(SDValue A, int immInByte) {
+      MVT VT = A.getSimpleValueType();
+      assert((VT.getSizeInBits() == 128 ||
+              VT.getSizeInBits() == 256) &&
+             "Shift left in bytes get wrong sized input.");
+
+      if (VT.getSizeInBits() == 128 && VT != MVT::v2i64)
+        A = BITCAST(A, MVT::v2i64);
+
+      SDValue B = DAG->getNode(ISD::INTRINSIC_WO_CHAIN, dl,
+                               MVT::v2i64,
+                               DAG->getConstant(Intrinsic::x86_sse2_psll_dq, MVT::i32),
+                               A, Constant(immInByte * 8, MVT::i32));
+      return B;
+    }
+
+    //X86 Specific function
+    //Shift right the i128 or i256 operand A by immInByte * 8 bits
+    //Return v2i64 for i128
+    SDValue ShiftRightLogicInByte(SDValue A, int immInByte) {
+      MVT VT = A.getSimpleValueType();
+      assert((VT.getSizeInBits() == 128 ||
+              VT.getSizeInBits() == 256) &&
+             "Shift right logic in bytes get wrong sized input.");
+
+      if (VT.getSizeInBits() == 128 && VT != MVT::v2i64)
+        A = BITCAST(A, MVT::v2i64);
+
+      SDValue B = DAG->getNode(ISD::INTRINSIC_WO_CHAIN, dl,
+                               MVT::v2i64,
+                               DAG->getConstant(Intrinsic::x86_sse2_psrl_dq, MVT::i32),
+                               A, Constant(immInByte * 8, MVT::i32));
+      return B;
+    }
+
+
+
     //simd<1>::ifh
     //just like SELECT, but for v128i1 vectors. if Mask[i] == 1, A[i] is chosen.
     //return with the same ValueType of A.

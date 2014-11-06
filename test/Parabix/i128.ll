@@ -15,6 +15,45 @@ entry:
   ;CHECK: por
 }
 
+define <2 x i64> @shl_8(<2 x i64> %a) {
+entry:
+  ;CHECK-LABEL: shl_8
+  %aa = bitcast <2 x i64> %a to i128
+
+  %r = shl i128 %aa, 8
+  %rr = bitcast i128 %r to <2 x i64>
+
+  ret <2 x i64> %rr
+  ;CHECK: pslldq $1
+}
+
+define <2 x i64> @lshr_1(<2 x i64> %a) {
+entry:
+  ;CHECK-LABEL: lshr_1
+  %aa = bitcast <2 x i64> %a to i128
+
+  %r = lshr i128 %aa, 1
+  %rr = bitcast i128 %r to <2 x i64>
+
+  ret <2 x i64> %rr
+  ;CHECK: psrlq $1
+  ;CHECK: psllq $63
+  ;CHECK: psrldq
+  ;CHECK: por
+}
+
+define <2 x i64> @lshr_8(<2 x i64> %a) {
+entry:
+  ;CHECK-LABEL: lshr_8
+  %aa = bitcast <2 x i64> %a to i128
+
+  %r = lshr i128 %aa, 8
+  %rr = bitcast i128 %r to <2 x i64>
+
+  ret <2 x i64> %rr
+  ;CHECK: psrldq $1
+}
+
 define void @advance_with_carry(<2 x i64> %strm, <2 x i64> %carry, <2 x i64>* %r, <2 x i64>* %carry_out) {
 entry:
   ;CHECK-LABEL: advance_with_carry

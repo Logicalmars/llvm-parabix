@@ -1033,19 +1033,58 @@ static SDValue PXPerformShiftCombine(SDNode *N, SelectionDAG &DAG,
 
   // long integer shift for MVT::i128
   if (Subtarget->hasSSE2() && VT == MVT::i128 && isImmediateShiftingMask(V2, imm)) {
+    if (imm % 8 == 0)
+    {
+      // for 128 bit SIMD register, there is pslldq and psrldq intrinsic
+      if (N->getOpcode() == ISD::SHL)
+      {
+        SDValue B = b.ShiftLeftInByte(V1, imm / 8);
+        return b.BITCAST(B, VT);
+      }
+      else if (N->getOpcode() == ISD::SRL)
+      {
+        return b.BITCAST(b.ShiftRightLogicInByte(V1, imm / 8), VT);
+      }
+
+      return SDValue();
+    }
+
     if (N->getOpcode() == ISD::SHL) {
       DEBUG(dbgs() << "Parabix combining: "; N->dump());
 
       if (imm >= 64) {
         int mask[] = {2, 0};
-        SDValue Shift64 = b.VECTOR_SHUFFLE(b.BITCAST(V1, MVT::v2i64), b.ConstantVector(MVT::v2i64, 0), mask);
+        SDValue Shift64 = b.VECTOR_SHUFFLE(b.BITCAST(V1, MVT::v2i64),
+                                           b.ConstantVector(MVT::v2i64, 0), mask);
         if (imm > 64) Shift64 = b.SHL(imm - 64, Shift64);
         return b.BITCAST(Shift64, VT);
       }
       else {
+        //Double shift
         SDValue ShiftField = b.SHL(imm, b.BITCAST(V1, MVT::v2i64));
         SDValue ShiftInPart = b.SRL(64 - imm, b.BITCAST(V1, MVT::v2i64));
         int mask[] = {2, 0};
+        ShiftInPart = b.VECTOR_SHUFFLE(ShiftInPart, b.ConstantVector(MVT::v2i64, 0), mask);
+        SDValue R = b.OR(ShiftInPart, ShiftField);
+
+        return b.BITCAST(R, VT);
+      }
+    }
+    else if (N->getOpcode() == ISD::SRL) {
+      DEBUG(dbgs() << "Parabix combining: "; N->dump());
+
+      if (imm >= 64) {
+        int mask[] = {3, 0};
+        SDValue Shift64 = b.VECTOR_SHUFFLE(b.ConstantVector(MVT::v2i64, 0),
+                                           b.BITCAST(V1, MVT::v2i64), mask);
+        if (imm > 64) Shift64 = b.SRL(imm - 64, Shift64);
+        return b.BITCAST(Shift64, VT);
+      }
+      else {
+        //Double shift
+        SDValue ShiftField = b.SRL(imm, b.BITCAST(V1, MVT::v2i64));
+        SDValue ShiftInPart = b.SHL(64 - imm, b.BITCAST(V1, MVT::v2i64));
+        int mask[] = {1, 2};
         ShiftInPart = b.VECTOR_SHUFFLE(ShiftInPart, b.ConstantVector(MVT::v2i64, 0), mask);
         SDValue R = b.OR(ShiftInPart, ShiftField);
 
