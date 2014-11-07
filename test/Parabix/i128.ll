@@ -54,6 +54,25 @@ entry:
   ;CHECK: psrldq $1
 }
 
+define <2 x i64> @dslli(<2 x i64> %a, <2 x i64> %b) {
+entry:
+  ;CHECK-LABEL: dslli
+  %aa = bitcast <2 x i64> %a to i128
+  %bb = bitcast <2 x i64> %b to i128
+
+  %a1 = shl i128 %aa, 1
+  %b1 = lshr i128 %bb, 127
+  %cc = or i128 %a1, %b1
+
+  %c = bitcast i128 %cc to <2 x i64>
+  ret <2 x i64> %c
+  ;CHECK: shufpd
+  ;CHECK: psrlq
+  ;CHECK: psllq
+  ;CHECK: por
+}
+
+
 define void @advance_with_carry(<2 x i64> %strm, <2 x i64> %carry, <2 x i64>* %r, <2 x i64>* %carry_out) {
 entry:
   ;CHECK-LABEL: advance_with_carry

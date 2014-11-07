@@ -1223,6 +1223,70 @@ static SDValue PXPerformUADDE(SDNode *N, SelectionDAG &DAG,
   return SDValue();
 }
 
+static SDValue PXPerformLogic(SDNode *N, SelectionDAG &DAG,
+                                     TargetLowering::DAGCombinerInfo &DCI,
+                                     const X86Subtarget *Subtarget) {
+  MVT VT = N->getSimpleValueType(0);
+  SDLoc dl(N);
+  SDValue V1 = N->getOperand(0);
+  SDValue V2 = N->getOperand(1);
+  SDNodeTreeBuilder b(&DAG, dl);
+
+  assert(((N->getOpcode() == ISD::OR) || (N->getOpcode() == ISD::AND) ||
+          (N->getOpcode() == ISD::XOR)) &&
+         "PXPerformLogic only works for AND / OR / XOR");
+
+  if (N->getOpcode() == ISD::OR && VT == MVT::i128 &&
+     ((V1.getOpcode() == ISD::SHL && V2.getOpcode() == ISD::SRL) ||
+      (V1.getOpcode() == ISD::SRL && V2.getOpcode() == ISD::SHL))) {
+    //possibly its advance with carry
+    //now check if the shl amount + shr amount is 128
+    if (V1.getOpcode() != ISD::SHL) {
+      std::swap(V1, V2);
+    }
+
+    int immLeft, immRight;
+    if (isImmediateShiftingMask(V1.getOperand(1), immLeft) &&
+        isImmediateShiftingMask(V2.getOperand(1), immRight))
+    {
+      if (immLeft + immRight == 128) {
+        //finally, it is advance with carry
+        SDValue A = b.BITCAST(V1.getOperand(0), MVT::v2i64);
+        SDValue B = b.BITCAST(V2.getOperand(0), MVT::v2i64);
+
+        int pool[] = {1, 2};
+        SDValue C = b.VECTOR_SHUFFLE(B, A, pool);
+        if (immLeft < 64) {
+          SDValue D = b.SHL(immLeft, A);
+          SDValue E = b.SRL(64 - immLeft, C);
+          SDValue R = b.OR(D, E);
+          return b.BITCAST(R, VT);
+        }
+        else
+        {
+          SDValue D = b.SHL(immLeft - 64, C);
+          SDValue E = b.SRL(128 - immLeft, B);
+          SDValue R = b.OR(D, E);
+          return b.BITCAST(R, VT);
+        }
+      }
+    }
+  }
+
+  if (VT == MVT::i128 && Subtarget->hasSSE2()) {
+    return b.BITCAST(DAG.getNode(N->getOpcode(), dl, MVT::v2i64,
+                                 b.BITCAST(V1, MVT::v2i64),
+                                 b.BITCAST(V2, MVT::v2i64)), VT);
+  }
+  else if (VT == MVT::i256 && Subtarget->hasAVX2()) {
+    return b.BITCAST(DAG.getNode(N->getOpcode(), dl, MVT::v4i64,
+                                 b.BITCAST(V1, MVT::v4i64),
+                                 b.BITCAST(V2, MVT::v4i64)), VT);
+  }
+
+  return SDValue();
+}
+
 SDValue X86TargetLowering::PerformParabixDAGCombine(SDNode *N, DAGCombinerInfo &DCI) const
 {
   //For now, only combine simple value type.
@@ -1237,6 +1301,9 @@ SDValue X86TargetLowering::PerformParabixDAGCombine(SDNode *N, DAGCombinerInfo &
   case ISD::SRL:                return PXPerformShiftCombine(N, DAG, DCI, Subtarget);
   case ISD::UADDO:              return PXPerformUADDO(N, DAG, DCI, Subtarget);
   case ISD::UADDE:              return PXPerformUADDE(N, DAG, DCI, Subtarget);
+  case ISD::AND:
+  case ISD::XOR:
+  case ISD::OR:                 return PXPerformLogic(N, DAG, DCI, Subtarget);
   }
 
   return SDValue();
