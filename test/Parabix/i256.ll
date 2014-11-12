@@ -47,3 +47,17 @@ entry:
 
   ret <4 x i64> %sum3
 }
+
+define <4 x i64> @dslli(<4 x i64> %a, <4 x i64> %b) {
+entry:
+  ;CHECK-LABEL: dslli
+  %aa = bitcast <4 x i64> %a to i256
+  %bb = bitcast <4 x i64> %b to i256
+
+  %a1 = shl i256 %aa, 1
+  %b1 = lshr i256 %bb, 255
+  %cc = or i256 %a1, %b1
+
+  %c = bitcast i256 %cc to <4 x i64>
+  ret <4 x i64> %c
+}

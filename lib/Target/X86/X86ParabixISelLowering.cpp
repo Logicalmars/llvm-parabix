@@ -1273,6 +1273,42 @@ static SDValue PXPerformLogic(SDNode *N, SelectionDAG &DAG,
     }
   }
 
+  if (N->getOpcode() == ISD::OR && VT == MVT::i256 &&
+     ((V1.getOpcode() == ISD::SHL && V2.getOpcode() == ISD::SRL) ||
+      (V1.getOpcode() == ISD::SRL && V2.getOpcode() == ISD::SHL))) {
+    //possibly its advance with carry
+    //now check if the shl amount + shr amount is 256
+    if (V1.getOpcode() != ISD::SHL) {
+      std::swap(V1, V2);
+    }
+
+    int immLeft, immRight;
+    if (isImmediateShiftingMask(V1.getOperand(1), immLeft) &&
+        isImmediateShiftingMask(V2.getOperand(1), immRight))
+    {
+      if (immLeft + immRight == 256) {
+        //finally, it is advance with carry
+        SDValue A = b.BITCAST(V1.getOperand(0), MVT::v4i64);
+        SDValue B = b.BITCAST(V2.getOperand(0), MVT::v4i64);
+
+        if (immLeft < 64) {
+          int pool[] = {3, 4, 5, 6};
+          SDValue C = b.VECTOR_SHUFFLE(B, A, pool);
+
+          SDValue D = b.SHL(immLeft, A);
+          SDValue E = b.SRL(64 - immLeft, C);
+          SDValue R = b.OR(D, E);
+          return b.BITCAST(R, VT);
+        }
+        else
+        {
+          //TODO: handle more double shift cases
+          return SDValue();
+        }
+      }
+    }
+  }
+
   if (VT == MVT::i128 && Subtarget->hasSSE2()) {
     return b.BITCAST(DAG.getNode(N->getOpcode(), dl, MVT::v2i64,
                                  b.BITCAST(V1, MVT::v2i64),
