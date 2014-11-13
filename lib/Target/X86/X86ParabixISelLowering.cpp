@@ -1236,10 +1236,13 @@ static SDValue PXPerformLogic(SDNode *N, SelectionDAG &DAG,
           (N->getOpcode() == ISD::XOR)) &&
          "PXPerformLogic only works for AND / OR / XOR");
 
+  /* Support for simd<128>::dslli<n>(A, B): long shift left for A, with shift-in bits in B
+   * Pattern: OR(SHL(i128 A, n), SHR(i128 B, 128 - n))
+   */
   if (N->getOpcode() == ISD::OR && VT == MVT::i128 &&
      ((V1.getOpcode() == ISD::SHL && V2.getOpcode() == ISD::SRL) ||
       (V1.getOpcode() == ISD::SRL && V2.getOpcode() == ISD::SHL))) {
-    //possibly its advance with carry
+    //possibly it's advance with carry
     //now check if the shl amount + shr amount is 128
     if (V1.getOpcode() != ISD::SHL) {
       std::swap(V1, V2);
@@ -1273,10 +1276,13 @@ static SDValue PXPerformLogic(SDNode *N, SelectionDAG &DAG,
     }
   }
 
+  /* Support for simd<256>::dslli<n>(A, B): long shift left for A, with shift-in bits in B
+   * Pattern: OR(SHL(i256 A, n), SHR(i256 B, 256 - n))
+   */
   if (N->getOpcode() == ISD::OR && VT == MVT::i256 &&
      ((V1.getOpcode() == ISD::SHL && V2.getOpcode() == ISD::SRL) ||
       (V1.getOpcode() == ISD::SRL && V2.getOpcode() == ISD::SHL))) {
-    //possibly its advance with carry
+    //possibly it's advance with carry
     //now check if the shl amount + shr amount is 256
     if (V1.getOpcode() != ISD::SHL) {
       std::swap(V1, V2);
@@ -1300,10 +1306,44 @@ static SDValue PXPerformLogic(SDNode *N, SelectionDAG &DAG,
           SDValue R = b.OR(D, E);
           return b.BITCAST(R, VT);
         }
+        else if (immLeft >= 64 && immLeft < 128)
+        {
+          int apool[] = {3, 4, 5, 6};
+          SDValue NA = b.VECTOR_SHUFFLE(B, A, apool);
+
+          int pool[] = {2, 3, 4, 5};
+          SDValue C = b.VECTOR_SHUFFLE(B, A, pool);
+
+          SDValue D = b.SHL(immLeft - 64, NA);
+          SDValue E = b.SRL(128 - immLeft, C);
+          SDValue R = b.OR(D, E);
+          return b.BITCAST(R, VT);
+        }
+        else if (immLeft >= 128 && immLeft < 192)
+        {
+          int apool[] = {2, 3, 4, 5};
+          SDValue NA = b.VECTOR_SHUFFLE(B, A, apool);
+
+          int pool[] = {1, 2, 3, 4};
+          SDValue C = b.VECTOR_SHUFFLE(B, A, pool);
+
+          SDValue D = b.SHL(immLeft - 128, NA);
+          SDValue E = b.SRL(192 - immLeft, C);
+          SDValue R = b.OR(D, E);
+
+          return b.BITCAST(R, VT);
+        }
         else
         {
-          //TODO: handle more double shift cases
-          return SDValue();
+          //immLeft >= 192 && immLeft <= 256
+          int apool[] = {1, 2, 3, 4};
+          A = b.VECTOR_SHUFFLE(B, A, apool);
+
+          SDValue D = b.SHL(immLeft - 192, A);
+          SDValue E = b.SRL(256 - immLeft, B);
+          SDValue R = b.OR(D, E);
+
+          return b.BITCAST(R, VT);
         }
       }
     }
